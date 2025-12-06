@@ -1,8 +1,11 @@
 """Chat-related Pydantic models."""
 
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
+
+from dataagent_server.models.user import UserContextRequest
 
 
 class ChatRequest(BaseModel):
@@ -11,6 +14,7 @@ class ChatRequest(BaseModel):
     message: str = Field(..., description="User message to send to the agent")
     session_id: str | None = Field(None, description="Optional session ID to continue conversation")
     assistant_id: str | None = Field(None, description="Optional assistant ID to use")
+    user_context: UserContextRequest | None = Field(None, description="Optional user context for personalization")
 
 
 class ChatResponse(BaseModel):

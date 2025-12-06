@@ -21,6 +21,12 @@ from dataagent_server.models.mcp import (
     MCPServerListResponse,
     MCPServerDeleteResponse,
 )
+from dataagent_server.models.user import (
+    UserContextRequest,
+    UserProfileRequest,
+    UserProfileResponse,
+    UserProfileListResponse,
+)
 
 __all__ = [
     "ChatRequest",
@@ -38,4 +44,8 @@ __all__ = [
     "MCPServerConfigResponse",
     "MCPServerListResponse",
     "MCPServerDeleteResponse",
+    "UserContextRequest",
+    "UserProfileRequest",
+    "UserProfileResponse",
+    "UserProfileListResponse",
 ]

@@ -15,7 +15,7 @@ from dataagent_server.api.deps import (
     set_session_manager,
     set_mcp_store,
 )
-from dataagent_server.api.v1 import chat, health, sessions, mcp, users
+from dataagent_server.api.v1 import chat, health, sessions, mcp, users, user_profiles
 from dataagent_server.config import get_settings
 from dataagent_server.ws import ConnectionManager, WebSocketChatHandler
 from dataagent_core.session import SessionStoreFactory, MessageStoreFactory
@@ -48,6 +48,7 @@ async def lifespan(app: FastAPI):
         from dataagent_core.session.stores.mysql import MySQLSessionStore
         from dataagent_core.session.stores.mysql_message import MySQLMessageStore
         from dataagent_core.mcp import MySQLMCPConfigStore
+        from dataagent_core.user import MemoryUserProfileStore  # TODO: Add MySQLUserProfileStore
         
         session_store = MySQLSessionStore(
             url=settings.mysql_url,
@@ -58,6 +59,7 @@ async def lifespan(app: FastAPI):
         message_store = MySQLMessageStore(engine=session_store._engine)
         mcp_store = MySQLMCPConfigStore(engine=session_store._engine)
         await mcp_store.init_tables()
+        user_profile_store = MemoryUserProfileStore()  # TODO: Use MySQL store
         
         logger.info(f"Using MySQL store: {settings.mysql_host}:{settings.mysql_port}/{settings.mysql_database}")
         
@@ -65,25 +67,31 @@ async def lifespan(app: FastAPI):
         from dataagent_core.session.stores.sqlite import SQLiteSessionStore
         from dataagent_core.session.stores.sqlite_message import SQLiteMessageStore
         from dataagent_core.mcp import SQLiteMCPConfigStore
+        from dataagent_core.user import SQLiteUserProfileStore
         
         session_store = SQLiteSessionStore(db_path=settings.sqlite_path)
         await session_store.init_tables()
         message_store = SQLiteMessageStore(engine=session_store._engine)
         mcp_store = SQLiteMCPConfigStore(engine=session_store._engine)
         await mcp_store.init_tables()
+        user_profile_store = SQLiteUserProfileStore(db_path=settings.sqlite_path)
+        await user_profile_store.init_tables()
         
         logger.info(f"Using SQLite store: {settings.sqlite_path}")
         
     else:
         from dataagent_core.session import MemorySessionStore, MemoryMessageStore
+        from dataagent_core.user import MemoryUserProfileStore
         session_store = MemorySessionStore()
         message_store = MemoryMessageStore()
         mcp_store = MemoryMCPConfigStore()
+        user_profile_store = MemoryUserProfileStore()
         logger.info("Using in-memory store")
     
     app.state.session_store = session_store
     app.state.message_store = message_store
     app.state.mcp_store = mcp_store
+    app.state.user_profile_store = user_profile_store
     set_mcp_store(mcp_store)
     
     # Initialize connection manager
@@ -111,6 +119,7 @@ async def lifespan(app: FastAPI):
         settings=core_settings,
         mcp_store=mcp_store,
         mcp_connection_manager=mcp_connection_manager,
+        user_profile_store=user_profile_store,
     )
     
     logger.info(f"DataAgent Server v{__version__} starting...")
@@ -163,6 +172,7 @@ def create_app() -> FastAPI:
     app.include_router(sessions.router, prefix="/api/v1")
     app.include_router(mcp.router, prefix="/api/v1")
     app.include_router(users.router, prefix="/api/v1")
+    app.include_router(user_profiles.router, prefix="/api/v1")
     
     # WebSocket endpoint
     @app.websocket("/ws/chat/{session_id}")

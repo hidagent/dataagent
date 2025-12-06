@@ -35,6 +35,7 @@ class AgentConfig:
     sandbox_type: str | None = None
     sandbox_id: str | None = None
     system_prompt: str | None = None
+    user_context: dict[str, Any] | None = None  # User context for personalization
     extra_tools: list[BaseTool] = field(default_factory=list)
     extra_middleware: list[AgentMiddleware] = field(default_factory=list)
     recursion_limit: int = 1000
@@ -280,6 +281,13 @@ class AgentFactory:
         system_prompt = config.system_prompt or get_system_prompt(
             config.assistant_id, config.sandbox_type
         )
+        
+        # Append user context to system prompt if provided
+        if config.user_context:
+            from dataagent_core.user import build_user_context_prompt
+            user_context_section = build_user_context_prompt(config.user_context)
+            if user_context_section:
+                system_prompt = f"{system_prompt}\n\n{user_context_section}"
 
         # Interrupt config
         interrupt_on = {} if config.auto_approve else _build_interrupt_config()

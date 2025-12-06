@@ -26,6 +26,7 @@ class WebSocketChatHandler:
         settings: Any | None = None,
         mcp_store: Any | None = None,
         mcp_connection_manager: Any | None = None,
+        user_profile_store: Any | None = None,
     ):
         """Initialize chat handler.
         
@@ -35,14 +36,17 @@ class WebSocketChatHandler:
             settings: Core settings for agent configuration.
             mcp_store: MCP configuration store.
             mcp_connection_manager: MCP connection manager.
+            user_profile_store: User profile store for user context.
         """
         self.connections = connection_manager
         self.agent_factory = agent_factory
         self.settings = settings
         self.mcp_store = mcp_store
         self.mcp_connection_manager = mcp_connection_manager
+        self.user_profile_store = user_profile_store
         self._executors: dict[str, Any] = {}  # session_id -> AgentExecutor
         self._session_users: dict[str, str] = {}  # session_id -> user_id
+        self._session_user_contexts: dict[str, dict] = {}  # session_id -> user_context
     
     async def handle_connection(
         self,
@@ -124,6 +128,8 @@ class WebSocketChatHandler:
         
         if msg_type == "chat":
             await self._handle_chat(payload, session_id)
+        elif msg_type == "set_user_context":
+            await self._handle_set_user_context(payload, session_id)
         elif msg_type == "hitl_decision":
             await self._handle_hitl_decision(payload, session_id)
         elif msg_type == "cancel":
@@ -137,12 +143,15 @@ class WebSocketChatHandler:
                 f"Unknown message type: {msg_type}",
             )
     
-    async def _get_or_create_executor(self, session_id: str, user_id: str = "anonymous") -> Any:
+    async def _get_or_create_executor(
+        self, session_id: str, user_id: str = "anonymous", user_context: dict | None = None
+    ) -> Any:
         """Get or create an AgentExecutor for the session.
         
         Args:
             session_id: Session ID.
             user_id: User ID for MCP configuration.
+            user_context: Optional user context for personalization.
             
         Returns:
             AgentExecutor instance.
@@ -155,7 +164,6 @@ class WebSocketChatHandler:
         
         # Import here to avoid circular imports
         from dataagent_core.engine import AgentExecutor, AgentConfig
-        from dataagent_core.hitl import HITLHandler
         
         # Create a HITL handler that uses the connection manager
         hitl_handler = WebSocketHITLHandler(
@@ -184,6 +192,11 @@ class WebSocketChatHandler:
         
         if extra_tools:
             config.extra_tools = extra_tools
+        
+        # Set user context in config - the factory will append it to system prompt
+        if user_context:
+            config.user_context = user_context
+            logger.info(f"Added user context to config for user {user_id}")
         
         # Create agent and backend
         agent, backend = self.agent_factory.create_agent(config)
@@ -238,12 +251,20 @@ class WebSocketChatHandler:
             })
             return
         
-        # Get user_id from payload or use default
-        user_id = payload.get("user_id", "anonymous")
+        # Get user_id from payload or stored context
+        user_id = payload.get("user_id") or self._session_users.get(session_id, "anonymous")
+        
+        # Get user context from payload or stored context
+        user_context = payload.get("user_context") or self._session_user_contexts.get(session_id)
+        
+        # If user_context provided in payload, update stored context
+        if payload.get("user_context"):
+            self._session_user_contexts[session_id] = payload["user_context"]
+            user_id = payload["user_context"].get("user_id", user_id)
         
         # Get or create executor for this session
         try:
-            executor = await self._get_or_create_executor(session_id, user_id)
+            executor = await self._get_or_create_executor(session_id, user_id, user_context)
             if executor is None:
                 await self._send_error(
                     session_id,
@@ -344,6 +365,56 @@ class WebSocketChatHandler:
             "data": {},
             "timestamp": time.time(),
         })
+    
+    async def _handle_set_user_context(
+        self,
+        payload: dict,
+        session_id: str,
+    ) -> None:
+        """Handle set_user_context message.
+        
+        Sets the user context for the session, which will be used
+        to personalize the agent's responses.
+        
+        Args:
+            payload: User context payload.
+            session_id: Session ID.
+        """
+        user_id = payload.get("user_id")
+        if not user_id:
+            await self._send_error(
+                session_id,
+                "INVALID_USER_CONTEXT",
+                "user_id is required in user context",
+            )
+            return
+        
+        # Build user context from payload
+        user_context = {
+            "user_id": user_id,
+            "username": payload.get("username"),
+            "display_name": payload.get("display_name"),
+            "department": payload.get("department"),
+            "role": payload.get("role"),
+            "custom_fields": payload.get("custom_fields", {}),
+            "is_anonymous": payload.get("display_name") is None,
+        }
+        
+        # Store user context for this session
+        self._session_user_contexts[session_id] = user_context
+        self._session_users[session_id] = user_id
+        
+        # Send confirmation
+        await self.connections.send(session_id, {
+            "event_type": "user_context_set",
+            "data": {
+                "user_id": user_id,
+                "display_name": user_context.get("display_name"),
+            },
+            "timestamp": time.time(),
+        })
+        
+        logger.info(f"User context set for session {session_id}: {user_id}")
     
     async def _send_error(
         self,
