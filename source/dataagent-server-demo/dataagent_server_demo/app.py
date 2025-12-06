@@ -208,7 +208,7 @@ async def connect_all_mcp_servers(
 
 # Chat functions
 def chat_websocket_sync(ws_url: str, session_id: str, user_id: str, message: str) -> str:
-    """Send chat message via WebSocket and collect response."""
+    """Send chat message via WebSocket and collect response (non-streaming)."""
     uri = f"{ws_url}/ws/chat/{session_id}"
     full_response = ""
 
@@ -266,6 +266,126 @@ def chat_websocket_sync(ws_url: str, session_id: str, user_id: str, message: str
     except Exception as e:
         full_response = f"❌ Error: {e}"
 
+    return full_response
+
+
+def chat_websocket_streaming(ws_url: str, session_id: str, user_id: str, message: str, placeholder) -> str:
+    """Send chat message via WebSocket with real-time streaming display.
+    
+    Args:
+        ws_url: WebSocket server URL
+        session_id: Session ID
+        user_id: User ID
+        message: User message
+        placeholder: Streamlit placeholder for real-time updates
+        
+    Returns:
+        Final response string
+    """
+    uri = f"{ws_url}/ws/chat/{session_id}"
+    full_response = ""
+    current_status = ""
+
+    def update_display():
+        """Update the placeholder with current content."""
+        display_content = full_response
+        if current_status:
+            display_content += f"\n\n⏳ *{current_status}*"
+        placeholder.markdown(display_content + "▌")
+
+    try:
+        ws = websocket.create_connection(uri, timeout=120)
+
+        connected_msg = ws.recv()
+        connected_data = json.loads(connected_msg)
+        if connected_data.get("event_type") != "connected":
+            return f"Connection failed: {connected_data}"
+
+        ws.send(
+            json.dumps(
+                {"type": "chat", "payload": {"message": message, "user_id": user_id}}
+            )
+        )
+
+        current_status = "正在思考..."
+        update_display()
+
+        while True:
+            try:
+                msg = ws.recv()
+                event = json.loads(msg)
+                event_type = event.get("event_type")
+                data = event.get("data", {})
+
+                if event_type == "text":
+                    content = data.get("content", "")
+                    full_response += content
+                    current_status = ""
+                    update_display()
+                    
+                elif event_type == "tool_call":
+                    tool_name = data.get("tool_name", "unknown")
+                    tool_args = data.get("arguments", {})
+                    # 显示工具调用
+                    full_response += f"\n\n🔧 **调用工具**: `{tool_name}`\n"
+                    # 简化显示参数
+                    if tool_args:
+                        args_str = json.dumps(tool_args, ensure_ascii=False)
+                        if len(args_str) > 100:
+                            args_str = args_str[:100] + "..."
+                        full_response += f"   参数: `{args_str}`\n"
+                    current_status = f"执行 {tool_name}..."
+                    update_display()
+                    
+                elif event_type == "tool_result":
+                    status = data.get("status", "unknown")
+                    result = data.get("result", "")
+                    icon = "✅" if status == "success" else "❌"
+                    
+                    # 格式化结果显示
+                    result_str = str(result)
+                    if len(result_str) > 300:
+                        result_str = result_str[:300] + "..."
+                    
+                    full_response += f"{icon} {result_str}\n"
+                    current_status = ""
+                    update_display()
+                    
+                elif event_type == "hitl":
+                    # 自动批准
+                    current_status = "等待审批..."
+                    update_display()
+                    ws.send(
+                        json.dumps(
+                            {
+                                "type": "hitl_decision",
+                                "payload": {"decisions": [{"type": "approve"}]},
+                            }
+                        )
+                    )
+                    current_status = ""
+                    
+                elif event_type == "error":
+                    error_msg = data.get("message", "Unknown error")
+                    full_response += f"\n\n❌ **错误**: {error_msg}\n"
+                    current_status = ""
+                    update_display()
+                    
+                elif event_type == "done":
+                    current_status = ""
+                    break
+
+            except websocket.WebSocketTimeoutException:
+                full_response += "\n\n⚠️ *请求超时*"
+                break
+
+        ws.close()
+
+    except Exception as e:
+        full_response = f"❌ 连接错误: {e}"
+
+    # Final update without cursor
+    placeholder.markdown(full_response)
     return full_response
 
 
@@ -654,17 +774,21 @@ def main():
             st.markdown(prompt)
 
         with st.chat_message("assistant"):
-            with st.spinner("思考中..."):
-                if mode == "WebSocket":
-                    response = chat_websocket_sync(
-                        ws_url, st.session_state.session_id, st.session_state.user_id, prompt
-                    )
-                else:
+            if mode == "WebSocket":
+                # 使用流式显示
+                response_placeholder = st.empty()
+                response = chat_websocket_streaming(
+                    ws_url, st.session_state.session_id, st.session_state.user_id, 
+                    prompt, response_placeholder
+                )
+            else:
+                # REST API 模式使用 spinner
+                with st.spinner("思考中..."):
                     response = send_chat_rest(
                         http_url, st.session_state.session_id, st.session_state.user_id, prompt, api_key
                     )
-
-            st.markdown(response)
+                st.markdown(response)
+            
             st.session_state.messages.append({"role": "assistant", "content": response})
 
 
