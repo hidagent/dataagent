@@ -125,6 +125,7 @@ def show_help(console: Console) -> None:
     console.print("  --auto-approve                Auto-approve tool usage without prompting")
     console.print("  --sandbox TYPE                Remote sandbox for execution (modal, runloop, daytona)")
     console.print("  --sandbox-id ID               Reuse existing sandbox (skips creation/cleanup)")
+    console.print("  --mcp-config PATH             Path to MCP configuration file")
     console.print()
 
     console.print("[bold]Examples:[/bold]", style=COLORS["primary"])
@@ -137,6 +138,43 @@ def show_help(console: Console) -> None:
     console.print("  dataagent list                         # List all agents", style=COLORS["dim"])
     console.print("  dataagent reset --agent mybot          # Reset mybot to default", style=COLORS["dim"])
     console.print("  dataagent reset --agent mybot --target other # Reset mybot to copy of 'other' agent", style=COLORS["dim"])
+    console.print()
+
+    console.print("[bold]Long-term Memory:[/bold]", style=COLORS["primary"])
+    console.print("  By default, long-term memory is ENABLED using agent name 'agent'.", style=COLORS["dim"])
+    console.print("  Memory includes:", style=COLORS["dim"])
+    console.print("  - Persistent agent.md file with your instructions", style=COLORS["dim"])
+    console.print("  - /memories/ folder for storing context across sessions", style=COLORS["dim"])
+    console.print()
+
+    console.print("[bold]Agent Storage:[/bold]", style=COLORS["primary"])
+    console.print("  Agents are stored in: ~/.deepagents/AGENT_NAME/", style=COLORS["dim"])
+    console.print("  Each agent has an agent.md file containing its prompt", style=COLORS["dim"])
+    console.print()
+
+    console.print("[bold]MCP Configuration:[/bold]", style=COLORS["primary"])
+    console.print("  MCP servers can be configured in: ~/.deepagents/{agent}/mcp.json", style=COLORS["dim"])
+    console.print("  Or specify a custom path with --mcp-config", style=COLORS["dim"])
+    console.print()
+
+    console.print("[bold]Interactive Features:[/bold]", style=COLORS["primary"])
+    console.print("  Enter           Submit your message", style=COLORS["dim"])
+    console.print("  Alt+Enter       Insert newline for multi-line (Option+Enter or ESC then Enter)", style=COLORS["dim"])
+    console.print("  Ctrl+J          Insert newline (alternative)", style=COLORS["dim"])
+    console.print("  Ctrl+T          Toggle auto-approve mode", style=COLORS["dim"])
+    console.print("  Arrow keys      Navigate input", style=COLORS["dim"])
+    console.print("  @filename       Type @ to auto-complete files and inject content", style=COLORS["dim"])
+    console.print("  /command        Type / to see available commands (auto-completes)", style=COLORS["dim"])
+    console.print()
+
+    console.print("[bold]Interactive Commands:[/bold]", style=COLORS["primary"])
+    console.print("  /help           Show available commands and features", style=COLORS["dim"])
+    console.print("  /clear          Clear screen and reset conversation", style=COLORS["dim"])
+    console.print("  /tokens         Show token usage for current session", style=COLORS["dim"])
+    console.print("  /mcp            Show configured MCP servers", style=COLORS["dim"])
+    console.print("  /mcp reload     Reload MCP configuration", style=COLORS["dim"])
+    console.print("  /quit, /exit    Exit the session", style=COLORS["dim"])
+    console.print("  quit, exit, q   Exit the session (just type and press Enter)", style=COLORS["dim"])
     console.print()
 
 
