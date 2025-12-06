@@ -54,3 +54,6 @@ packages = ["dataagent_server"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[tool.uv.sources]
+dataagent-core = { path = "../dataagent-core" }

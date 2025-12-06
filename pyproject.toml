@@ -2,9 +2,9 @@
 # Use importlib mode to avoid module name conflicts across multiple packages
 pythonpath = ["."]
 testpaths = [
-    "libs/dataagent-core/tests",
-    "libs/dataagent-server/tests",
-    "libs/dataagent-harbor/tests",
+    "source/dataagent-core/tests",
+    "source/dataagent-server/tests",
+    "source/dataagent-harbor/tests",
 ]
 # Prevent conftest.py conflicts by using unique namespace
 addopts = "--import-mode=importlib"

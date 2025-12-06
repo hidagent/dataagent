@@ -48,12 +48,13 @@ DataAgent 是基于 DeepAgent 构建的数据智能助手平台，支持终端�
 
 ```
 dataagent/
-├── source/
+├── source/                  # DataAgent 源代码
 │   ├── dataagent-core/      # 核心库：Agent 创建、执行、事件系统
 │   ├── dataagent-cli/       # CLI 客户端：终端交互界面
 │   ├── dataagent-server/    # Web 服务：REST API + WebSocket
-│   └── dataagent-harbor/    # 测试框架：压测和评估工具
-├── libs/                    # 依赖库（deepagents 等）
+│   ├── dataagent-harbor/    # 测试框架：压测和评估工具
+│   └── dataagent-server-demo/  # Streamlit 演示
+├── libs/                    # 依赖库（deepagents、deepagents-cli、harbor）
 └── docs/                    # 设计文档
 ```
 
