@@ -5,12 +5,13 @@
 ## 目录
 
 1. [开发环境搭建](#开发环境搭建)
-2. [项目结构](#项目结构)
-3. [核心概念](#核心概念)
-4. [开发流程](#开发流程)
-5. [代码规范](#代码规范)
-6. [测试指南](#测试指南)
-7. [常见问题](#常见问题)
+2. [开发模式快速启动](#开发模式快速启动)
+3. [项目结构](#项目结构)
+4. [核心概念](#核心概念)
+5. [开发流程](#开发流程)
+6. [代码规范](#代码规范)
+7. [测试指南](#测试指南)
+8. [常见问题](#常见问题)
 
 ---
 
@@ -64,6 +65,143 @@ cp .env.example .env
 pytest source/dataagent-core/tests -v
 pytest source/dataagent-server/tests -v
 ```
+
+---
+
+## 开发模式快速启动
+
+项目提供了两种快速启动方式，方便开发调试时快速验证代码修改效果。
+
+### 方式一：使用 Makefile
+
+```bash
+# 查看所有可用命令
+make help
+```
+
+**安装命令**：
+
+```bash
+# 安装所有包（开发模式）
+make install
+
+# 安装包含开发依赖
+make install-dev
+
+# 强制重新安装（代码修改后）
+make reinstall
+```
+
+**运行命令**：
+
+```bash
+# 运行 CLI
+make run-cli                        # 启动交互式 CLI
+make run-cli-agent AGENT=mybot      # 使用指定 Agent
+make run-cli-auto                   # 启用自动审批模式
+make cli-help                       # 显示 CLI 帮助
+
+# 运行 Server（带热重载，代码修改自动生效）
+make run-server                     # 默认端口 8000
+make run-server-port PORT=9000      # 自定义端口
+
+# 运行 Demo
+make run-demo                       # 启动 Streamlit Demo
+```
+
+**测试命令**：
+
+```bash
+make test                           # 运行所有测试
+make test-core                      # 仅运行 Core 测试
+make test-server                    # 仅运行 Server 测试
+make test-harbor                    # 仅运行 Harbor 测试
+make test-cov                       # 运行测试并生成覆盖率报告
+make test-file FILE=path/to/test.py # 运行指定测试文件
+```
+
+**代码质量**：
+
+```bash
+make lint                           # 运行代码检查
+make format                         # 格式化代码
+make typecheck                      # 类型检查
+make clean                          # 清理缓存文件
+```
+
+### 方式二：使用开发脚本
+
+```bash
+# 查看帮助
+./scripts/dev.sh help
+```
+
+**运行 CLI**：
+
+```bash
+./scripts/dev.sh cli                    # 启动 CLI
+./scripts/dev.sh cli --agent mybot      # 使用指定 Agent
+./scripts/dev.sh cli --auto-approve     # 自动审批模式
+./scripts/dev.sh cli help               # 显示 CLI 帮助
+```
+
+**运行 Server**：
+
+```bash
+./scripts/dev.sh server                 # 启动 Server（端口 8000，热重载）
+./scripts/dev.sh server --port 9000     # 自定义端口
+```
+
+**运行测试**：
+
+```bash
+./scripts/dev.sh test                   # 运行所有测试
+./scripts/dev.sh test core              # 仅运行 Core 测试
+./scripts/dev.sh test server            # 仅运行 Server 测试
+./scripts/dev.sh test harbor            # 仅运行 Harbor 测试
+```
+
+**安装**：
+
+```bash
+./scripts/dev.sh install                # 安装所有包
+```
+
+### 开发工作流示例
+
+**场景 1：修改 CLI 代码后验证**
+
+```bash
+# 修改 source/dataagent-cli/dataagent_cli/commands.py 后
+./scripts/dev.sh cli help               # 立即查看效果，无需重新安装
+```
+
+**场景 2：修改 Server 代码后验证**
+
+```bash
+# 启动 Server（热重载模式）
+make run-server
+
+# 修改 source/dataagent-server/dataagent_server/api/v1/chat.py
+# Server 会自动重载，无需重启
+```
+
+**场景 3：修改 Core 代码后验证**
+
+```bash
+# 修改 source/dataagent-core/dataagent_core/events/__init__.py 后
+make reinstall                          # 重新安装 Core 包
+make test-core                          # 运行测试验证
+```
+
+### 特点说明
+
+| 特点 | 说明 |
+|------|------|
+| 自动设置 PYTHONPATH | 脚本自动配置路径，无需手动设置 |
+| 热重载 | Server 启动带 `--reload`，代码修改自动生效 |
+| 无需重装 | CLI 修改后可直接运行验证 |
+| 快速切换 | 支持快速切换不同模块测试 |
 
 ---
 
