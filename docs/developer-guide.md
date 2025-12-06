@@ -26,7 +26,7 @@
 
 ```bash
 git clone <repository-url>
-cd deepagents
+cd dataagent
 ```
 
 ### 3. 创建虚拟环境
@@ -40,11 +40,11 @@ source .venv/bin/activate  # Linux/macOS
 ### 4. 安装开发依赖
 
 ```bash
-# 安装所有组件（开发模式）
-pip install -e libs/dataagent-core[dev]
-pip install -e libs/dataagent-cli[dev]
-pip install -e libs/dataagent-server[dev]
-pip install -e libs/dataagent-harbor[dev]
+# 安装所有组件（开发模式，按依赖顺序）
+pip install -e source/dataagent-core[test]
+pip install -e source/dataagent-cli
+pip install -e source/dataagent-server[dev]
+pip install -e source/dataagent-harbor[dev]
 
 # 安装测试依赖
 pip install pytest pytest-asyncio pytest-cov hypothesis
@@ -61,8 +61,8 @@ cp .env.example .env
 
 ```bash
 # 运行测试
-pytest libs/dataagent-core/tests -v
-pytest libs/dataagent-server/tests -v
+pytest source/dataagent-core/tests -v
+pytest source/dataagent-server/tests -v
 ```
 
 ---
@@ -70,8 +70,8 @@ pytest libs/dataagent-server/tests -v
 ## 项目结构
 
 ```
-deepagents/
-├── libs/                          # 核心库
+dataagent/
+├── source/                        # DataAgent 源代码
 │   ├── dataagent-core/            # 核心业务逻辑
 │   │   ├── dataagent_core/
 │   │   │   ├── engine/            # Agent 工厂和执行器
@@ -80,6 +80,7 @@ deepagents/
 │   │   │   ├── tools/             # 工具系统
 │   │   │   ├── hitl/              # HITL 协议
 │   │   │   ├── session/           # 会话管理
+│   │   │   ├── mcp/               # MCP 集成
 │   │   │   └── config/            # 配置管理
 │   │   └── tests/
 │   │
@@ -92,16 +93,18 @@ deepagents/
 │   │
 │   ├── dataagent-server/          # Web 服务
 │   │   ├── dataagent_server/
-│   │   │   ├── api/v1/            # REST API
+│   │   │   ├── api/v1/            # REST API (chat, sessions, mcp, users)
 │   │   │   ├── ws/                # WebSocket
-│   │   │   ├── auth/              # 认证
-│   │   │   ├── models/            # 数据模型
+│   │   │   ├── auth/              # API Key 认证
+│   │   │   ├── hitl/              # WebSocket HITL 处理
+│   │   │   ├── models/            # Pydantic 数据模型
 │   │   │   └── config/            # 配置
 │   │   └── tests/
 │   │
 │   ├── dataagent-harbor/          # 测试框架
-│   └── dataagent-server-demo/     # Demo 应用
+│   └── dataagent-server-demo/     # Streamlit Demo 应用
 │
+├── libs/                          # 依赖库 (deepagents, deepagents-cli, harbor)
 ├── docs/                          # 文档
 └── .kiro/specs/                   # 需求和设计文档
 ```
@@ -226,25 +229,25 @@ git checkout -b feature/your-feature-name
 
 ```bash
 # 运行特定测试
-pytest libs/dataagent-core/tests/test_events -v
+pytest source/dataagent-core/tests/test_events -v
 
 # 运行所有测试
-pytest libs/dataagent-core/tests -v
-pytest libs/dataagent-server/tests -v
+pytest source/dataagent-core/tests -v
+pytest source/dataagent-server/tests -v
 
 # 带覆盖率
-pytest libs/dataagent-core/tests --cov=dataagent_core
+pytest source/dataagent-core/tests --cov=dataagent_core
 ```
 
 ### 3. 代码检查
 
 ```bash
 # 类型检查
-mypy libs/dataagent-core/dataagent_core
+mypy source/dataagent-core/dataagent_core
 
 # 格式化
-black libs/dataagent-core
-isort libs/dataagent-core
+black source/dataagent-core
+isort source/dataagent-core
 ```
 
 ### 4. 提交代码
@@ -435,74 +438,216 @@ export LANGSMITH_API_KEY=xxx
 export LANGSMITH_TRACING_V2=true
 ```
 
-### Q: 如何配置 MCP Server？（规划中）
+### Q: 如何配置 MCP Server？
+
+MCP (Model Context Protocol) 配置支持两种模式：
 
 **CLI 模式**：创建配置文件 `~/.deepagents/{assistant_id}/mcp.json`
 
 ```json
 {
-  "servers": [
-    {
-      "name": "filesystem",
+  "mcpServers": {
+    "filesystem": {
       "command": "uvx",
       "args": ["mcp-server-filesystem", "/workspace"],
       "env": {},
       "disabled": false,
-      "timeout": 30
+      "autoApprove": []
     },
-    {
-      "name": "database",
+    "database": {
       "command": "uvx",
       "args": ["mcp-server-mysql"],
       "env": {
         "MYSQL_HOST": "localhost",
         "MYSQL_USER": "root"
       },
-      "disabled": false
+      "disabled": false,
+      "autoApprove": ["query"]
     }
-  ]
+  }
 }
 ```
 
-**Server 模式**：通过 REST API 动态配置
+**Server 模式**：通过 REST API 动态配置（每用户独立配置）
 
 ```bash
 # 添加 MCP Server
 curl -X POST http://localhost:8000/api/v1/users/{user_id}/mcp-servers \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key" \
   -d '{
     "name": "filesystem",
     "command": "uvx",
-    "args": ["mcp-server-filesystem", "/workspace"]
+    "args": ["mcp-server-filesystem", "/workspace"],
+    "env": {},
+    "disabled": false,
+    "auto_approve": []
   }'
 
 # 列出 MCP Servers
-curl http://localhost:8000/api/v1/users/{user_id}/mcp-servers
+curl http://localhost:8000/api/v1/users/{user_id}/mcp-servers \
+  -H "X-API-Key: your-api-key"
+
+# 获取单个 MCP Server
+curl http://localhost:8000/api/v1/users/{user_id}/mcp-servers/filesystem \
+  -H "X-API-Key: your-api-key"
+
+# 更新 MCP Server
+curl -X PUT http://localhost:8000/api/v1/users/{user_id}/mcp-servers/filesystem \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key" \
+  -d '{
+    "name": "filesystem",
+    "command": "uvx",
+    "args": ["mcp-server-filesystem", "/new-workspace"],
+    "disabled": false
+  }'
 
 # 删除 MCP Server
-curl -X DELETE http://localhost:8000/api/v1/users/{user_id}/mcp-servers/filesystem
+curl -X DELETE http://localhost:8000/api/v1/users/{user_id}/mcp-servers/filesystem \
+  -H "X-API-Key: your-api-key"
 ```
 
-### Q: 如何实现多租户用户隔离？（规划中）
+**核心组件**：
 
-1. **会话隔离**：`SessionStore` 的查询方法自动按 `user_id` 过滤
-2. **记忆隔离**：`AgentMemoryMiddleware` 存储路径包含 `user_id`
-3. **文件隔离**：使用 `SandboxedFilesystemBackend` 限制操作范围
-4. **MCP 隔离**：每个用户独立的 MCP 连接池
+| 组件 | 说明 |
+|------|------|
+| `MCPConfig` | MCP 配置数据模型，支持 JSON 序列化 |
+| `MCPServerConfig` | 单个 MCP Server 配置 |
+| `MCPConnectionManager` | 管理多用户 MCP 连接池 |
+| `MCPConfigStore` | 配置存储抽象（支持内存/MySQL） |
+
+**代码示例**：
 
 ```python
-# 创建用户隔离的 Agent
-config = AgentConfig(
-    assistant_id="my-agent",
-    user_id="user-123",  # 指定用户 ID
-    workspace_root=Path("/data/workspaces/user-123"),  # 用户工作区
+from dataagent_core.mcp import (
+    MCPConfig,
+    MCPServerConfig,
+    MCPConnectionManager,
+    MemoryMCPConfigStore,
 )
+
+# 创建配置
+config = MCPConfig()
+config.add_server(MCPServerConfig(
+    name="filesystem",
+    command="uvx",
+    args=["mcp-server-filesystem", "/workspace"],
+))
+
+# 连接管理
+manager = MCPConnectionManager(
+    max_connections_per_user=10,
+    max_total_connections=100,
+)
+
+# 为用户连接 MCP Servers
+connections = await manager.connect(user_id="user-1", config=config)
+
+# 获取用户的 MCP 工具
+tools = manager.get_tools(user_id="user-1")
+```
+
+### Q: 如何实现多租户用户隔离？
+
+DataAgent 已实现完整的多租户用户隔离机制：
+
+**1. 会话隔离**
+
+`SessionStore` 的查询方法自动按 `user_id` 过滤：
+
+```python
+from dataagent_core.session import SessionManager
+
+manager = SessionManager(timeout_seconds=3600)
+await manager.start()
+
+# 获取用户会话（自动隔离）
+session = await manager.get_or_create_session(
+    user_id="user-123",
+    assistant_id="my-agent",
+)
+
+# 列出用户会话（只返回该用户的会话）
+sessions = await manager.list_user_sessions(user_id="user-123")
+```
+
+**2. 记忆隔离**
+
+用户记忆存储在独立目录 `~/.deepagents/users/{user_id}/`：
+
+```bash
+# 查看用户记忆状态
+curl http://localhost:8000/api/v1/users/{user_id}/memory/status \
+  -H "X-API-Key: your-api-key"
+
+# 清除用户记忆
+curl -X DELETE http://localhost:8000/api/v1/users/{user_id}/memory \
+  -H "X-API-Key: your-api-key"
+```
+
+**3. MCP 隔离**
+
+每个用户独立的 MCP 连接池，通过 `MCPConnectionManager` 管理：
+
+```python
+from dataagent_core.mcp import MCPConnectionManager
+
+manager = MCPConnectionManager(
+    max_connections_per_user=10,   # 每用户最大连接数
+    max_total_connections=100,     # 全局最大连接数
+)
+
+# 为用户连接 MCP（隔离的连接池）
+await manager.connect(user_id="user-123", config=mcp_config)
+
+# 获取用户的 MCP 工具（只返回该用户的工具）
+tools = manager.get_tools(user_id="user-123")
+
+# 断开用户的 MCP 连接
+await manager.disconnect(user_id="user-123")
+```
+
+**4. API 访问控制**
+
+REST API 自动验证用户权限：
+
+```python
+# 用户只能访问自己的资源
+# 访问其他用户资源会返回 403 Forbidden
+def _check_user_access(user_id: str, current_user_id: str) -> None:
+    if user_id != current_user_id and current_user_id != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied to other user's resources",
+        )
+```
+
+**隔离架构图**：
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    DataAgent Server                          │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  User A                          User B                     │
+│  ┌─────────────────┐            ┌─────────────────┐        │
+│  │ Sessions        │            │ Sessions        │        │
+│  │ Memory          │            │ Memory          │        │
+│  │ MCP Connections │            │ MCP Connections │        │
+│  │ MCP Config      │            │ MCP Config      │        │
+│  └─────────────────┘            └─────────────────┘        │
+│                                                             │
+│  Storage: ~/.deepagents/users/user-a/                       │
+│  Storage: ~/.deepagents/users/user-b/                       │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ### Q: 测试失败怎么办？
 
 1. 检查环境变量是否配置正确
-2. 确保依赖版本正确：`pip install -e libs/dataagent-core[dev]`
+2. 确保依赖版本正确：`pip install -e source/dataagent-core[test]`
 3. 查看测试输出的详细错误信息
 4. 使用 `pytest -v --tb=long` 获取完整堆栈
 
