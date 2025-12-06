@@ -32,10 +32,11 @@ show_help() {
     echo -e "${YELLOW}Commands:${NC}"
     echo "  cli [args]        Run DataAgent CLI"
     echo "  server [args]     Run DataAgent Server (with hot-reload)"
-    echo "  demo              Run Streamlit Demo"
+    echo "  demo              Run Streamlit Demo (with hot-reload)"
+    echo "  dev [port]        Run Server + Demo together (recommended for development)"
     echo "  test [module]     Run tests (core|server|harbor|all)"
     echo "  install           Install all packages in dev mode"
-    echo "  help              Show CLI help"
+    echo "  help              Show this help"
     echo ""
     echo -e "${YELLOW}Examples:${NC}"
     echo "  ./scripts/dev.sh cli                    # Start CLI"
@@ -43,7 +44,10 @@ show_help() {
     echo "  ./scripts/dev.sh cli --auto-approve     # Start CLI with auto-approve"
     echo "  ./scripts/dev.sh cli help               # Show CLI help"
     echo "  ./scripts/dev.sh server                 # Start server on port 8000"
-    echo "  ./scripts/dev.sh server --port 9000    # Start server on port 9000"
+    echo "  ./scripts/dev.sh server --port 9000     # Start server on port 9000"
+    echo "  ./scripts/dev.sh demo                   # Start demo only"
+    echo "  ./scripts/dev.sh dev                    # Start server + demo (port 8000)"
+    echo "  ./scripts/dev.sh dev 9000               # Start server + demo (port 9000)"
     echo "  ./scripts/dev.sh test core              # Run core tests"
     echo "  ./scripts/dev.sh test server            # Run server tests"
     echo "  ./scripts/dev.sh test                   # Run all tests"
@@ -81,7 +85,48 @@ run_server() {
 
 run_demo() {
     echo -e "${GREEN}Starting Streamlit Demo...${NC}"
-    streamlit run source/dataagent-server-demo/dataagent_server_demo/app.py
+    echo -e "${YELLOW}Hot-reload enabled - changes will auto-reload${NC}"
+    echo ""
+    streamlit run source/dataagent-server-demo/dataagent_server_demo/app.py --server.runOnSave true
+}
+
+run_dev() {
+    # 同时启动 Server 和 Demo
+    echo -e "${GREEN}Starting Server + Demo development environment...${NC}"
+    echo ""
+    
+    # 检查端口是否被占用
+    local server_port="${1:-8000}"
+    
+    # 启动 Server（后台）
+    echo -e "${YELLOW}Starting Server on port $server_port (background)...${NC}"
+    uvicorn dataagent_server.main:app --reload --host 0.0.0.0 --port "$server_port" &
+    SERVER_PID=$!
+    
+    # 等待 Server 启动
+    sleep 2
+    
+    # 检查 Server 是否启动成功
+    if ! kill -0 $SERVER_PID 2>/dev/null; then
+        echo -e "${RED}Server failed to start${NC}"
+        exit 1
+    fi
+    
+    echo -e "${GREEN}Server started (PID: $SERVER_PID)${NC}"
+    echo ""
+    
+    # 启动 Demo（前台）
+    echo -e "${YELLOW}Starting Demo...${NC}"
+    echo -e "${YELLOW}Press Ctrl+C to stop both Server and Demo${NC}"
+    echo ""
+    
+    # 捕获退出信号，清理后台进程
+    trap "echo ''; echo -e '${YELLOW}Stopping...${NC}'; kill $SERVER_PID 2>/dev/null; exit 0" INT TERM
+    
+    streamlit run source/dataagent-server-demo/dataagent_server_demo/app.py --server.runOnSave true
+    
+    # Demo 退出后，停止 Server
+    kill $SERVER_PID 2>/dev/null
 }
 
 run_tests() {
@@ -132,6 +177,10 @@ case "${1:-help}" in
         ;;
     demo)
         run_demo
+        ;;
+    dev)
+        shift
+        run_dev "$@"
         ;;
     test)
         shift

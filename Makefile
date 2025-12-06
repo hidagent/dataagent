@@ -57,7 +57,15 @@ run-server-port:
 
 # Run Streamlit Demo
 run-demo:
-	streamlit run source/dataagent-server-demo/dataagent_server_demo/app.py
+	streamlit run source/dataagent-server-demo/dataagent_server_demo/app.py --server.runOnSave true
+
+# Run Server + Demo together (in background)
+run-dev:
+	@echo "Starting Server on port 8000..."
+	@uvicorn dataagent_server.main:app --reload --host 0.0.0.0 --port 8000 &
+	@sleep 2
+	@echo "Starting Demo..."
+	@streamlit run source/dataagent-server-demo/dataagent_server_demo/app.py --server.runOnSave true
 
 # Show CLI help
 cli-help:
@@ -146,7 +154,8 @@ help:
 	@echo '  make run-cli-auto     Run CLI with auto-approve'
 	@echo '  make run-server       Run Server with hot-reload (port 8000)'
 	@echo '  make run-server-port PORT=9000  Run Server on custom port'
-	@echo '  make run-demo         Run Streamlit demo'
+	@echo '  make run-demo         Run Streamlit demo (with hot-reload)'
+	@echo '  make run-dev          Run Server + Demo together (recommended)'
 	@echo '  make cli-help         Show CLI help'
 	@echo ''
 	@echo '-- TESTING --'

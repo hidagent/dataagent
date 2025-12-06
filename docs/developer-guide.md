@@ -105,8 +105,11 @@ make cli-help                       # 显示 CLI 帮助
 make run-server                     # 默认端口 8000
 make run-server-port PORT=9000      # 自定义端口
 
-# 运行 Demo
+# 运行 Demo（带热重载）
 make run-demo                       # 启动 Streamlit Demo
+
+# 运行 Server + Demo（推荐，开发时最常用）
+make run-dev                        # 同时启动 Server 和 Demo
 ```
 
 **测试命令**：
@@ -152,6 +155,14 @@ make clean                          # 清理缓存文件
 ./scripts/dev.sh server --port 9000     # 自定义端口
 ```
 
+**运行 Demo**：
+
+```bash
+./scripts/dev.sh demo                   # 仅启动 Demo
+./scripts/dev.sh dev                    # 同时启动 Server + Demo（推荐）
+./scripts/dev.sh dev 9000               # 使用自定义端口启动 Server + Demo
+```
+
 **运行测试**：
 
 ```bash
@@ -176,7 +187,18 @@ make clean                          # 清理缓存文件
 ./scripts/dev.sh cli help               # 立即查看效果，无需重新安装
 ```
 
-**场景 2：修改 Server 代码后验证**
+**场景 2：修改 Server 代码后验证（推荐方式）**
+
+```bash
+# 启动 Server + Demo（最常用的开发方式）
+./scripts/dev.sh dev
+
+# 修改 source/dataagent-server/dataagent_server/api/v1/chat.py
+# Server 会自动重载，在 Demo 页面刷新即可看到效果
+# 按 Ctrl+C 同时停止 Server 和 Demo
+```
+
+**场景 3：仅修改 Server 代码**
 
 ```bash
 # 启动 Server（热重载模式）
@@ -186,12 +208,22 @@ make run-server
 # Server 会自动重载，无需重启
 ```
 
-**场景 3：修改 Core 代码后验证**
+**场景 4：修改 Core 代码后验证**
 
 ```bash
 # 修改 source/dataagent-core/dataagent_core/events/__init__.py 后
 make reinstall                          # 重新安装 Core 包
 make test-core                          # 运行测试验证
+```
+
+**场景 5：修改 Demo 代码后验证**
+
+```bash
+# 启动 Demo（热重载模式）
+./scripts/dev.sh demo
+
+# 修改 source/dataagent-server-demo/dataagent_server_demo/app.py
+# Demo 会自动重载，浏览器自动刷新
 ```
 
 ### 特点说明
