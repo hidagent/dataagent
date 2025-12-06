@@ -35,37 +35,44 @@ reinstall:
 # RUNNING
 ######################
 
+# PYTHONPATH 设置 - 让修改 Core 后只需重启即可生效
+PYTHONPATH_DEV = PYTHONPATH=source/dataagent-core:source/dataagent-cli:source/dataagent-server:source/dataagent-harbor:source/dataagent-server-demo:$(PYTHONPATH)
+
+# Reload 目录 - 监控 Core 和 Server 代码变化
+RELOAD_DIRS = --reload-dir source/dataagent-core --reload-dir source/dataagent-server
+
 # Run CLI in development mode
 run-cli:
-	python -m dataagent_cli.main
+	$(PYTHONPATH_DEV) python -m dataagent_cli.main
 
 # Run CLI with specific agent
 run-cli-agent:
-	python -m dataagent_cli.main --agent $(AGENT)
+	$(PYTHONPATH_DEV) python -m dataagent_cli.main --agent $(AGENT)
 
 # Run CLI with auto-approve
 run-cli-auto:
-	python -m dataagent_cli.main --auto-approve
+	$(PYTHONPATH_DEV) python -m dataagent_cli.main --auto-approve
 
-# Run Server in development mode
+# Run Server in development mode (auto-reload on Core & Server changes)
 run-server:
-	uvicorn dataagent_server.main:app --reload --host 0.0.0.0 --port 8000
+	@echo "Starting Server with hot-reload (Core & Server changes will auto-reload)..."
+	$(PYTHONPATH_DEV) uvicorn dataagent_server.main:app --reload $(RELOAD_DIRS) --host 0.0.0.0 --port 8000
 
 # Run Server on custom port
 run-server-port:
-	uvicorn dataagent_server.main:app --reload --host 0.0.0.0 --port $(PORT)
+	$(PYTHONPATH_DEV) uvicorn dataagent_server.main:app --reload $(RELOAD_DIRS) --host 0.0.0.0 --port $(PORT)
 
 # Run Streamlit Demo
 run-demo:
-	streamlit run source/dataagent-server-demo/dataagent_server_demo/app.py --server.runOnSave true
+	$(PYTHONPATH_DEV) streamlit run source/dataagent-server-demo/dataagent_server_demo/app.py --server.runOnSave true
 
-# Run Server + Demo together (in background)
+# Run Server + Demo together (recommended for development)
 run-dev:
-	@echo "Starting Server on port 8000..."
-	@uvicorn dataagent_server.main:app --reload --host 0.0.0.0 --port 8000 &
+	@echo "Starting Server + Demo (Core & Server changes will auto-reload)..."
+	@$(PYTHONPATH_DEV) uvicorn dataagent_server.main:app --reload $(RELOAD_DIRS) --host 0.0.0.0 --port 8000 &
 	@sleep 2
 	@echo "Starting Demo..."
-	@streamlit run source/dataagent-server-demo/dataagent_server_demo/app.py --server.runOnSave true
+	@$(PYTHONPATH_DEV) streamlit run source/dataagent-server-demo/dataagent_server_demo/app.py --server.runOnSave true
 
 # Show CLI help
 cli-help:

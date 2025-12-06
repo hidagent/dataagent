@@ -11,46 +11,67 @@ from typing import Any
 @dataclass
 class MCPServerConfig:
     """Configuration for a single MCP server.
-    
+
     Attributes:
         name: Unique identifier for the MCP server.
         command: Command to execute (e.g., 'uvx', 'npx', 'python').
         args: Command arguments.
         env: Environment variables for the server process.
+        url: HTTP/SSE URL for MCP server (alternative to command).
+        transport: Transport type for URL-based servers ('sse' or 'streamable_http').
+        headers: Custom HTTP headers for HTTP transport.
         disabled: Whether the server is disabled.
         auto_approve: List of tool names to auto-approve.
     """
-    
+
     name: str
-    command: str
+    command: str = ""
     args: list[str] = field(default_factory=list)
     env: dict[str, str] = field(default_factory=dict)
+    url: str | None = None
+    transport: str = "sse"  # 'sse' or 'streamable_http'
+    headers: dict[str, str] = field(default_factory=dict)
     disabled: bool = False
     auto_approve: list[str] = field(default_factory=list)
-    
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return asdict(self)
-    
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> MCPServerConfig:
         """Create from dictionary."""
         return cls(
             name=data["name"],
-            command=data["command"],
+            command=data.get("command", ""),
             args=data.get("args", []),
             env=data.get("env", {}),
+            url=data.get("url"),
+            transport=data.get("transport", "sse"),
+            headers=data.get("headers", {}),
             disabled=data.get("disabled", False),
             auto_approve=data.get("autoApprove", data.get("auto_approve", [])),
         )
-    
+
     def to_mcp_client_config(self) -> dict[str, Any]:
         """Convert to langchain-mcp-adapters MultiServerMCPClient format."""
-        return {
-            "command": self.command,
-            "args": self.args,
-            "env": self.env if self.env else None,
-        }
+        if self.url:
+            # HTTP transport (sse or streamable_http)
+            config: dict[str, Any] = {
+                "url": self.url,
+                "transport": self.transport or "sse",
+            }
+            # 添加自定义 headers
+            if self.headers:
+                config["headers"] = self.headers
+            return config
+        else:
+            # Stdio transport
+            return {
+                "command": self.command,
+                "args": self.args,
+                "env": self.env if self.env else None,
+            }
 
 
 @dataclass
@@ -65,18 +86,24 @@ class MCPConfig:
     
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary (mcp.json format)."""
-        return {
-            "mcpServers": {
-                name: {
-                    "command": server.command,
-                    "args": server.args,
-                    "env": server.env,
-                    "disabled": server.disabled,
-                    "autoApprove": server.auto_approve,
-                }
-                for name, server in self.servers.items()
-            }
-        }
+        mcp_servers = {}
+        for name, server in self.servers.items():
+            server_dict: dict[str, Any] = {}
+            if server.url:
+                server_dict["url"] = server.url
+                server_dict["transport"] = server.transport
+                if server.headers:
+                    server_dict["headers"] = server.headers
+            else:
+                server_dict["command"] = server.command
+                server_dict["args"] = server.args
+                if server.env:
+                    server_dict["env"] = server.env
+            server_dict["disabled"] = server.disabled
+            if server.auto_approve:
+                server_dict["autoApprove"] = server.auto_approve
+            mcp_servers[name] = server_dict
+        return {"mcpServers": mcp_servers}
     
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> MCPConfig:

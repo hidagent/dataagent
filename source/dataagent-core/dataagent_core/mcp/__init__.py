@@ -8,6 +8,7 @@ from dataagent_core.mcp.store import (
     MemoryMCPConfigStore,
     MySQLMCPConfigStore,
 )
+from dataagent_core.mcp.sqlite_store import SQLiteMCPConfigStore
 
 __all__ = [
     "MCPServerConfig",
@@ -18,4 +19,5 @@ __all__ = [
     "MCPConfigStore",
     "MemoryMCPConfigStore",
     "MySQLMCPConfigStore",
+    "SQLiteMCPConfigStore",
 ]

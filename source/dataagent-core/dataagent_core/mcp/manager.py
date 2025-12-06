@@ -101,31 +101,108 @@ class MCPConnectionManager:
         self,
         server_config: MCPServerConfig,
     ) -> MCPConnection:
-        """Create a connection to an MCP server."""
+        """Create a connection to an MCP server.
+        
+        For URL-based servers, automatically detects the correct transport type
+        by trying streamable_http first, then falling back to sse.
+        """
         connection = MCPConnection(server_config=server_config)
         
         try:
             from langchain_mcp_adapters.client import MultiServerMCPClient
-        except ImportError:
-            connection.error = "langchain-mcp-adapters not installed"
-            logger.warning(connection.error)
+        except ImportError as e:
+            connection.error = f"langchain-mcp-adapters not installed: {e}"
+            print(f"[MCP Manager] Import error: {connection.error}")
             return connection
         
+        # For URL-based servers, try auto-detecting transport type
+        if server_config.url:
+            transports_to_try = self._get_transports_to_try(server_config)
+            
+            for transport in transports_to_try:
+                print(f"[MCP Manager] Trying '{server_config.name}' with transport: {transport}")
+                result = await self._try_connect(
+                    server_config, transport, MultiServerMCPClient
+                )
+                if result.connected:
+                    # Update server_config with successful transport
+                    if transport != server_config.transport:
+                        server_config.transport = transport
+                        print(f"[MCP Manager] Auto-detected transport: {transport}")
+                    return result
+                else:
+                    print(f"[MCP Manager] Transport {transport} failed: {result.error}")
+            
+            # All transports failed, return last error
+            connection.error = result.error
+            return connection
+        else:
+            # Command-based server, no transport detection needed
+            return await self._try_connect(
+                server_config, None, MultiServerMCPClient
+            )
+    
+    def _get_transports_to_try(self, server_config: MCPServerConfig) -> list[str]:
+        """Get list of transports to try for auto-detection.
+        
+        Strategy:
+        - If user explicitly set a non-default transport, try that first
+        - Otherwise, try streamable_http first (more common for modern MCP servers)
+        - Then fall back to sse
+        """
+        if server_config.transport and server_config.transport != "sse":
+            # User explicitly set transport, try it first then fallback
+            return [server_config.transport, "sse"]
+        else:
+            # Default: try streamable_http first (POST), then sse (GET)
+            return ["streamable_http", "sse"]
+    
+    async def _try_connect(
+        self,
+        server_config: MCPServerConfig,
+        transport: str | None,
+        client_class: type,
+    ) -> MCPConnection:
+        """Try to connect with a specific transport type."""
+        connection = MCPConnection(server_config=server_config)
+        
         try:
-            mcp_config = {server_config.name: server_config.to_mcp_client_config()}
-            client = MultiServerMCPClient(mcp_config)
-            await client.__aenter__()
+            # Build config with specified transport
+            if server_config.url and transport:
+                mcp_client_config: dict = {
+                    "url": server_config.url,
+                    "transport": transport,
+                }
+                if server_config.headers:
+                    mcp_client_config["headers"] = server_config.headers
+            else:
+                mcp_client_config = server_config.to_mcp_client_config()
+            
+            print(f"[MCP Manager] Connecting to '{server_config.name}' with config: {mcp_client_config}")
+            
+            mcp_config = {server_config.name: mcp_client_config}
+            client = client_class(mcp_config)
+            
+            print(f"[MCP Manager] Calling client.get_tools()...")
+            tools = await client.get_tools()
             
             connection.client = client
-            connection.tools = client.get_tools()
+            connection.tools = tools
             connection.connected = True
-            logger.info(
-                f"Connected to MCP server '{server_config.name}' "
-                f"with {len(connection.tools)} tools"
+            print(
+                f"[MCP Manager] SUCCESS: '{server_config.name}' connected, "
+                f"{len(connection.tools)} tools: {[t.name for t in connection.tools]}"
             )
+        except ExceptionGroup as eg:
+            import traceback
+            errors = []
+            for exc in eg.exceptions:
+                errors.append(str(exc))
+            connection.error = "; ".join(errors) if errors else str(eg)
+            print(f"[MCP Manager] FAILED: '{server_config.name}' - {connection.error}")
         except Exception as e:
             connection.error = str(e)
-            logger.warning(f"Failed to connect to MCP server '{server_config.name}': {e}")
+            print(f"[MCP Manager] FAILED: '{server_config.name}' - {e}")
         
         return connection
     
@@ -149,12 +226,15 @@ class MCPConnectionManager:
             
             for name in servers_to_disconnect:
                 connection = user_connections.get(name)
-                if connection and connection.client:
-                    try:
-                        await connection.client.__aexit__(None, None, None)
-                        logger.info(f"Disconnected MCP server '{name}' for user {user_id}")
-                    except Exception as e:
-                        logger.warning(f"Error disconnecting MCP server '{name}': {e}")
+                if connection:
+                    if connection.client:
+                        try:
+                            # langchain-mcp-adapters 0.1.0+ 使用 close() 方法
+                            if hasattr(connection.client, 'close'):
+                                await connection.client.close()
+                            logger.info(f"Disconnected MCP server '{name}' for user {user_id}")
+                        except Exception as e:
+                            logger.warning(f"Error disconnecting MCP server '{name}': {e}")
                     
                     if connection.connected:
                         self._total_connections -= 1
@@ -167,9 +247,12 @@ class MCPConnectionManager:
     
     async def disconnect_all(self) -> None:
         """Disconnect all MCP connections."""
+        # Get list of users first, then disconnect each without holding lock
         async with self._lock:
-            for user_id in list(self._connections.keys()):
-                await self.disconnect(user_id)
+            user_ids = list(self._connections.keys())
+        
+        for user_id in user_ids:
+            await self.disconnect(user_id)
     
     def get_tools(self, user_id: str) -> list[BaseTool]:
         """Get all MCP tools for a user.

@@ -24,6 +24,10 @@ sandbox = [
     "daytona>=0.113.0",
     "runloop-api-client>=0.69.0",
 ]
+sqlite = [
+    "sqlalchemy[asyncio]>=2.0.0",
+    "aiosqlite>=0.19.0",
+]
 mysql = [
     "sqlalchemy[asyncio]>=2.0.0",
     "aiomysql>=0.2.0",

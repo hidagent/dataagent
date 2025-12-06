@@ -1,6 +1,7 @@
 """Server configuration settings."""
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -20,7 +21,11 @@ class ServerSettings(BaseSettings):
     
     # Authentication
     api_keys: list[str] = []
-    auth_disabled: bool = False
+    auth_disabled: bool = True  # Disabled by default for development
+    
+    # Default user for development mode
+    default_user: str = "dataagent"
+    default_password: str = "dataagent"
     
     # CORS
     cors_origins: list[str] = ["*"]
@@ -34,8 +39,11 @@ class ServerSettings(BaseSettings):
     # HITL
     hitl_timeout: int = 300
     
-    # Session storage configuration
-    session_store: Literal["memory", "mysql"] = "memory"
+    # Session storage configuration: memory, sqlite, mysql
+    session_store: Literal["memory", "sqlite", "mysql"] = "sqlite"
+    
+    # SQLite configuration (default for development)
+    sqlite_path: str = str(Path.home() / ".dataagent" / "dataagent.db")
     
     # MySQL configuration
     mysql_host: str = "localhost"

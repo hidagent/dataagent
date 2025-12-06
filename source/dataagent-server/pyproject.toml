@@ -28,17 +28,20 @@ dependencies = [
     "pydantic-settings>=2.0.0",
     "python-multipart>=0.0.6",
     "sqlalchemy[asyncio]>=2.0.0",
-    "aiomysql>=0.2.0",
+    "aiosqlite>=0.19.0",
+    "langchain-mcp-adapters>=0.0.1",
 ]
 
 [project.optional-dependencies]
+mysql = [
+    "aiomysql>=0.2.0",
+]
 dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.0.0",
     "httpx>=0.25.0",
     "hypothesis>=6.0.0",
-    "aiosqlite>=0.19.0",
 ]
 
 [project.scripts]

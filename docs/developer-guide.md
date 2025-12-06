@@ -17,6 +17,35 @@
 
 ## 开发环境搭建
 
+### 开发模式默认配置
+
+为了简化开发人员的配置工作，开发模式下使用以下默认配置：
+
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| 默认用户 | `dataagent` | Demo 默认使用此用户，无需注册登录 |
+| 默认密码 | `dataagent` | 开发模式下的默认密码 |
+| 数据库 | SQLite | 自动创建 `~/.dataagent/dataagent.db` |
+| 认证 | 禁用 | `auth_disabled=True`，无需 API Key |
+
+**数据存储位置**：
+- 数据库文件：`~/.dataagent/dataagent.db`
+- Agent 数据：`~/.deepagents/`
+
+**环境变量覆盖**（可选）：
+```bash
+# 切换到 MySQL 存储
+export DATAAGENT_SESSION_STORE=mysql
+export DATAAGENT_MYSQL_HOST=localhost
+export DATAAGENT_MYSQL_USER=root
+export DATAAGENT_MYSQL_PASSWORD=password
+export DATAAGENT_MYSQL_DATABASE=dataagent
+
+# 启用认证
+export DATAAGENT_AUTH_DISABLED=false
+export DATAAGENT_API_KEYS='["your-api-key"]'
+```
+
 ### 1. 环境要求
 
 - Python 3.11+
@@ -211,8 +240,13 @@ make run-server
 **场景 4：修改 Core 代码后验证**
 
 ```bash
-# 修改 source/dataagent-core/dataagent_core/events/__init__.py 后
-make reinstall                          # 重新安装 Core 包
+# 启动开发环境
+./scripts/dev.sh dev
+
+# 修改 source/dataagent-core/dataagent_core/events/__init__.py
+# Server 会自动检测到 Core 代码变化并重载，无需重新安装！
+
+# 如果需要运行测试
 make test-core                          # 运行测试验证
 ```
 
@@ -231,9 +265,10 @@ make test-core                          # 运行测试验证
 | 特点 | 说明 |
 |------|------|
 | 自动设置 PYTHONPATH | 脚本自动配置路径，无需手动设置 |
-| 热重载 | Server 启动带 `--reload`，代码修改自动生效 |
-| 无需重装 | CLI 修改后可直接运行验证 |
-| 快速切换 | 支持快速切换不同模块测试 |
+| Core 热重载 | 修改 `dataagent-core` 代码后，Server 自动重载，无需重新安装 |
+| Server 热重载 | 修改 `dataagent-server` 代码后自动重载 |
+| Demo 热重载 | 修改 Demo 代码后浏览器自动刷新 |
+| 无需重装 | 所有模块修改后只需重启或等待自动重载 |
 
 ---
 

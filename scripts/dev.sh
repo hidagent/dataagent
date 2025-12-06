@@ -15,8 +15,11 @@ NC='\033[0m' # No Color
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
-# 设置 PYTHONPATH
-export PYTHONPATH="$PROJECT_ROOT/source/dataagent-core:$PROJECT_ROOT/source/dataagent-cli:$PROJECT_ROOT/source/dataagent-server:$PROJECT_ROOT/source/dataagent-harbor:$PYTHONPATH"
+# 设置 PYTHONPATH - 包含所有源码目录，修改 Core 后只需重启即可生效
+export PYTHONPATH="$PROJECT_ROOT/source/dataagent-core:$PROJECT_ROOT/source/dataagent-cli:$PROJECT_ROOT/source/dataagent-server:$PROJECT_ROOT/source/dataagent-harbor:$PROJECT_ROOT/source/dataagent-server-demo:$PYTHONPATH"
+
+# 添加 reload 目录，让 uvicorn 监控 Core 代码变化
+RELOAD_DIRS="--reload-dir $PROJECT_ROOT/source/dataagent-core --reload-dir $PROJECT_ROOT/source/dataagent-server"
 
 print_header() {
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -78,9 +81,10 @@ run_server() {
     done
     
     echo -e "${GREEN}Starting DataAgent Server on port $port...${NC}"
-    echo -e "${YELLOW}Hot-reload enabled - changes will auto-reload${NC}"
+    echo -e "${YELLOW}Hot-reload enabled - Core & Server changes will auto-reload${NC}"
     echo ""
-    uvicorn dataagent_server.main:app --reload --host 0.0.0.0 --port "$port" "${args[@]}"
+    # 使用 --reload-dir 监控 Core 和 Server 目录
+    uvicorn dataagent_server.main:app --reload $RELOAD_DIRS --host 0.0.0.0 --port "$port" "${args[@]}"
 }
 
 run_demo() {
@@ -93,14 +97,15 @@ run_demo() {
 run_dev() {
     # 同时启动 Server 和 Demo
     echo -e "${GREEN}Starting Server + Demo development environment...${NC}"
+    echo -e "${YELLOW}Core & Server changes will auto-reload (no reinstall needed)${NC}"
     echo ""
     
     # 检查端口是否被占用
     local server_port="${1:-8000}"
     
-    # 启动 Server（后台）
+    # 启动 Server（后台），监控 Core 和 Server 目录
     echo -e "${YELLOW}Starting Server on port $server_port (background)...${NC}"
-    uvicorn dataagent_server.main:app --reload --host 0.0.0.0 --port "$server_port" &
+    uvicorn dataagent_server.main:app --reload $RELOAD_DIRS --host 0.0.0.0 --port "$server_port" &
     SERVER_PID=$!
     
     # 等待 Server 启动

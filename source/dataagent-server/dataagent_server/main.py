@@ -30,6 +30,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Ensure dataagent modules log at INFO level
+logging.getLogger("dataagent_core").setLevel(logging.INFO)
+logging.getLogger("dataagent_server").setLevel(logging.INFO)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -42,27 +46,45 @@ async def lifespan(app: FastAPI):
     # Initialize session store based on configuration
     if settings.session_store == "mysql":
         from dataagent_core.session.stores.mysql import MySQLSessionStore
+        from dataagent_core.session.stores.mysql_message import MySQLMessageStore
+        from dataagent_core.mcp import MySQLMCPConfigStore
+        
         session_store = MySQLSessionStore(
             url=settings.mysql_url,
             pool_size=settings.mysql_pool_size,
             max_overflow=settings.mysql_max_overflow,
         )
-        # Initialize database tables
         await session_store.init_tables()
-        
-        # Create message store sharing the same engine
-        from dataagent_core.session.stores.mysql_message import MySQLMessageStore
         message_store = MySQLMessageStore(engine=session_store._engine)
+        mcp_store = MySQLMCPConfigStore(engine=session_store._engine)
+        await mcp_store.init_tables()
         
-        logger.info(f"Using MySQL session store: {settings.mysql_host}:{settings.mysql_port}/{settings.mysql_database}")
+        logger.info(f"Using MySQL store: {settings.mysql_host}:{settings.mysql_port}/{settings.mysql_database}")
+        
+    elif settings.session_store == "sqlite":
+        from dataagent_core.session.stores.sqlite import SQLiteSessionStore
+        from dataagent_core.session.stores.sqlite_message import SQLiteMessageStore
+        from dataagent_core.mcp import SQLiteMCPConfigStore
+        
+        session_store = SQLiteSessionStore(db_path=settings.sqlite_path)
+        await session_store.init_tables()
+        message_store = SQLiteMessageStore(engine=session_store._engine)
+        mcp_store = SQLiteMCPConfigStore(engine=session_store._engine)
+        await mcp_store.init_tables()
+        
+        logger.info(f"Using SQLite store: {settings.sqlite_path}")
+        
     else:
         from dataagent_core.session import MemorySessionStore, MemoryMessageStore
         session_store = MemorySessionStore()
         message_store = MemoryMessageStore()
-        logger.info("Using in-memory session store")
+        mcp_store = MemoryMCPConfigStore()
+        logger.info("Using in-memory store")
     
     app.state.session_store = session_store
     app.state.message_store = message_store
+    app.state.mcp_store = mcp_store
+    set_mcp_store(mcp_store)
     
     # Initialize connection manager
     app.state.connection_manager = ConnectionManager(
@@ -74,17 +96,6 @@ async def lifespan(app: FastAPI):
     agent_factory = AgentFactory(settings=core_settings)
     app.state.agent_factory = agent_factory
     app.state.core_settings = core_settings
-    
-    # Initialize MCP config store
-    if settings.session_store == "mysql":
-        from dataagent_core.mcp import MySQLMCPConfigStore
-        mcp_store = MySQLMCPConfigStore(engine=session_store._engine)
-        await mcp_store.init_tables()
-    else:
-        mcp_store = MemoryMCPConfigStore()
-    
-    app.state.mcp_store = mcp_store
-    set_mcp_store(mcp_store)
     
     # Initialize MCP connection manager
     mcp_connection_manager = MCPConnectionManager(
@@ -105,12 +116,13 @@ async def lifespan(app: FastAPI):
     logger.info(f"DataAgent Server v{__version__} starting...")
     logger.info(f"Listening on {settings.host}:{settings.port}")
     logger.info(f"Max connections: {settings.max_connections}")
+    logger.info(f"Default user: {settings.default_user}")
     
     yield
     
     # Cleanup
     await mcp_connection_manager.disconnect_all()
-    if settings.session_store == "mysql":
+    if settings.session_store in ("mysql", "sqlite"):
         await session_store.close()
     logger.info("DataAgent Server shutting down...")
 

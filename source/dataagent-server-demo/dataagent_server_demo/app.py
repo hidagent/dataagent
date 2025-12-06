@@ -2,10 +2,7 @@
 
 import asyncio
 import json
-import time
 import uuid
-import threading
-from typing import Generator
 
 import httpx
 import streamlit as st
@@ -14,7 +11,7 @@ import websocket
 
 # Page config
 st.set_page_config(
-    page_title="DataAgent Server Demo",
+    page_title="DataAgent Demo",
     page_icon="🤖",
     layout="wide",
 )
@@ -26,8 +23,10 @@ def init_session_state():
         st.session_state.messages = []
     if "session_id" not in st.session_state:
         st.session_state.session_id = str(uuid.uuid4())
-    if "connected" not in st.session_state:
-        st.session_state.connected = False
+    if "user_id" not in st.session_state:
+        st.session_state.user_id = "dataagent"
+    if "mcp_servers" not in st.session_state:
+        st.session_state.mcp_servers = []
 
 
 def get_server_url(host: str, port: int, use_ssl: bool = False) -> tuple[str, str]:
@@ -41,223 +40,48 @@ def get_server_url(host: str, port: int, use_ssl: bool = False) -> tuple[str, st
 
 async def check_health(http_url: str, api_key: str | None = None) -> dict | None:
     """Check server health status."""
-    headers = {}
-    if api_key:
-        headers["X-API-Key"] = api_key
-    
+    headers = {"X-API-Key": api_key} if api_key else {}
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{http_url}/api/v1/health",
-                headers=headers,
-                timeout=5.0,
+                f"{http_url}/api/v1/health", headers=headers, timeout=5.0
             )
             if response.status_code == 200:
                 return response.json()
-    except Exception as e:
-        st.error(f"Health check failed: {e}")
+    except Exception:
+        pass
     return None
 
 
-async def get_sessions(http_url: str, api_key: str | None = None) -> list:
-    """Get list of sessions from server."""
-    headers = {}
+# MCP API functions
+async def load_mcp_servers(
+    http_url: str, user_id: str, api_key: str | None = None
+) -> list[dict]:
+    """Load MCP servers with status from server."""
+    headers = {"X-User-ID": user_id}
     if api_key:
         headers["X-API-Key"] = api_key
-    
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{http_url}/api/v1/sessions",
-                headers=headers,
-                timeout=10.0,
-            )
-            if response.status_code == 200:
-                data = response.json()
-                return data.get("sessions", [])
-    except Exception as e:
-        st.error(f"Failed to get sessions: {e}")
-    return []
-
-
-async def get_messages(
-    http_url: str,
-    session_id: str,
-    api_key: str | None = None,
-    limit: int = 100,
-) -> list:
-    """Get messages for a session."""
-    headers = {}
-    if api_key:
-        headers["X-API-Key"] = api_key
-    
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{http_url}/api/v1/sessions/{session_id}/messages",
-                headers=headers,
-                params={"limit": limit},
-                timeout=10.0,
-            )
-            if response.status_code == 200:
-                data = response.json()
-                return data.get("messages", [])
-    except Exception as e:
-        st.error(f"Failed to get messages: {e}")
-    return []
-
-
-async def send_chat_rest(
-    http_url: str,
-    message: str,
-    session_id: str,
-    api_key: str | None = None,
-) -> dict | None:
-    """Send chat message via REST API."""
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["X-API-Key"] = api_key
-    
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{http_url}/api/v1/chat",
-                headers=headers,
-                json={
-                    "message": message,
-                    "session_id": session_id,
-                },
-                timeout=60.0,
-            )
-            if response.status_code == 200:
-                return response.json()
-            else:
-                st.error(f"Chat failed: {response.status_code} - {response.text}")
-    except Exception as e:
-        st.error(f"Chat request failed: {e}")
-    return None
-
-
-def chat_websocket_sync(
-    ws_url: str,
-    session_id: str,
-    message: str,
-) -> str:
-    """Send chat message via WebSocket and collect response (sync version)."""
-    uri = f"{ws_url}/ws/chat/{session_id}"
-    full_response = ""
-    events = []
-    
-    try:
-        ws = websocket.create_connection(uri, timeout=10)
-        
-        # Wait for connected event
-        connected_msg = ws.recv()
-        connected_data = json.loads(connected_msg)
-        
-        if connected_data.get("event_type") != "connected":
-            return f"❌ Unexpected connection response: {connected_data}"
-        
-        # Send chat message
-        ws.send(json.dumps({
-            "type": "chat",
-            "payload": {"message": message},
-        }))
-        
-        # Receive events
-        while True:
-            try:
-                msg = ws.recv()
-                event = json.loads(msg)
-                event_type = event.get("event_type")
-                data = event.get("data", {})
-                events.append(event)
-                
-                if event_type == "text":
-                    content = data.get("content", "")
-                    full_response += content
-                    
-                elif event_type == "tool_call":
-                    tool_name = data.get("tool_name", "unknown")
-                    tool_args = data.get("tool_args", {})
-                    full_response += f"\n\n🔧 **Tool Call**: `{tool_name}`\n```json\n{json.dumps(tool_args, indent=2)}\n```\n"
-                    
-                elif event_type == "tool_result":
-                    result = data.get("result", "")
-                    status = data.get("status", "unknown")
-                    icon = "✅" if status == "success" else "❌"
-                    full_response += f"\n{icon} **Result**: {str(result)[:200]}{'...' if len(str(result)) > 200 else ''}\n"
-                    
-                elif event_type == "hitl":
-                    action = data.get("action", {})
-                    full_response += f"\n\n⚠️ **Human Approval Required**\n```json\n{json.dumps(action, indent=2)}\n```\n"
-                    # Auto-approve for demo
-                    ws.send(json.dumps({
-                        "type": "hitl_decision",
-                        "payload": {"decisions": [{"type": "approve"}]},
-                    }))
-                    
-                elif event_type == "error":
-                    error_msg = data.get("message", "Unknown error")
-                    full_response += f"\n\n❌ **Error**: {error_msg}\n"
-                    
-                elif event_type == "done":
-                    cancelled = data.get("cancelled", False)
-                    if cancelled:
-                        full_response += "\n\n⏹️ *Cancelled*"
-                    break
-                    
-            except websocket.WebSocketTimeoutException:
-                full_response += "\n\n⚠️ *Response timeout*"
-                break
-        
-        ws.close()
-        
-    except websocket.WebSocketException as e:
-        full_response = f"❌ WebSocket error: {e}"
-    except Exception as e:
-        full_response = f"❌ Error: {e}"
-    
-    return full_response
-
-
-async def get_mcp_servers(
-    http_url: str,
-    user_id: str,
-    api_key: str | None = None,
-) -> list:
-    """Get MCP servers for a user."""
-    headers = {}
-    if api_key:
-        headers["X-API-Key"] = api_key
-
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 f"{http_url}/api/v1/users/{user_id}/mcp-servers",
                 headers=headers,
-                timeout=10.0,
+                timeout=5.0,
             )
             if response.status_code == 200:
-                return response.json()
-            elif response.status_code == 404:
-                return []  # API not implemented yet
+                return response.json().get("servers", [])
     except Exception:
-        pass  # API not implemented yet
+        pass
     return []
 
 
-async def add_mcp_server(
-    http_url: str,
-    user_id: str,
-    server_config: dict,
-    api_key: str | None = None,
-) -> bool:
-    """Add MCP server for a user."""
-    headers = {"Content-Type": "application/json"}
+async def save_mcp_server(
+    http_url: str, user_id: str, server_config: dict, api_key: str | None = None
+) -> tuple[bool, str]:
+    """Save MCP server configuration."""
+    headers = {"X-User-ID": user_id, "Content-Type": "application/json"}
     if api_key:
         headers["X-API-Key"] = api_key
-
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -266,291 +90,582 @@ async def add_mcp_server(
                 json=server_config,
                 timeout=10.0,
             )
-            return response.status_code in (200, 201)
-    except Exception:
-        return False
+            if response.status_code in (200, 201):
+                return True, "保存成功"
+            return False, f"保存失败: {response.status_code}"
+    except Exception as e:
+        return False, f"保存失败: {e}"
 
 
 async def delete_mcp_server(
-    http_url: str,
-    user_id: str,
-    server_name: str,
-    api_key: str | None = None,
-) -> bool:
-    """Delete MCP server for a user."""
-    headers = {}
+    http_url: str, user_id: str, server_name: str, api_key: str | None = None
+) -> tuple[bool, str]:
+    """Delete MCP server."""
+    headers = {"X-User-ID": user_id}
     if api_key:
         headers["X-API-Key"] = api_key
-
     try:
         async with httpx.AsyncClient() as client:
             response = await client.delete(
                 f"{http_url}/api/v1/users/{user_id}/mcp-servers/{server_name}",
                 headers=headers,
-                timeout=10.0,
+                timeout=5.0,
             )
-            return response.status_code in (200, 204)
-    except Exception:
-        return False
+            if response.status_code == 200:
+                return True, "删除成功"
+            return False, f"删除失败: {response.status_code}"
+    except Exception as e:
+        return False, f"删除失败: {e}"
+
+
+async def toggle_mcp_server(
+    http_url: str,
+    user_id: str,
+    server_name: str,
+    disabled: bool,
+    api_key: str | None = None,
+) -> tuple[bool, str]:
+    """Enable or disable MCP server."""
+    headers = {"X-User-ID": user_id, "Content-Type": "application/json"}
+    if api_key:
+        headers["X-API-Key"] = api_key
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{http_url}/api/v1/users/{user_id}/mcp-servers/{server_name}/toggle",
+                headers=headers,
+                json={"disabled": disabled},
+                timeout=5.0,
+            )
+            if response.status_code == 200:
+                return True, "已禁用" if disabled else "已启用"
+            return False, f"操作失败: {response.status_code}"
+    except Exception as e:
+        return False, f"操作失败: {e}"
+
+
+async def connect_mcp_server(
+    http_url: str, user_id: str, server_name: str, api_key: str | None = None
+) -> dict:
+    """Connect to MCP server and get status."""
+    import traceback
+
+    url = f"{http_url}/api/v1/users/{user_id}/mcp-servers/{server_name}/connect"
+    headers = {"X-User-ID": user_id}
+    if api_key:
+        headers["X-API-Key"] = api_key
+
+    # 打印请求信息
+    print(f"\n{'='*60}")
+    print(f"[Demo MCP Connect] POST {url}")
+    print(f"[Demo MCP Connect] Headers: {headers}")
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, headers=headers, timeout=30.0)
+            print(f"[Demo MCP Connect] Response Status: {response.status_code}")
+            print(f"[Demo MCP Connect] Response Body: {response.text}")
+            print(f"{'='*60}\n")
+
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return {
+                    "success": False,
+                    "error": f"HTTP {response.status_code}: {response.text}",
+                }
+    except httpx.ConnectError as e:
+        error_msg = f"无法连接到服务器 {http_url}，请确认 Server 已启动"
+        print(f"[Demo MCP Connect] ConnectError: {e}")
+        print(f"{'='*60}\n")
+        return {"success": False, "error": error_msg}
+    except httpx.TimeoutException as e:
+        error_msg = f"请求超时: {e}"
+        print(f"[Demo MCP Connect] Timeout: {e}")
+        print(f"{'='*60}\n")
+        return {"success": False, "error": error_msg}
+    except Exception as e:
+        error_msg = f"{type(e).__name__}: {e}"
+        print(f"[Demo MCP Connect] Exception: {type(e).__name__}: {e}")
+        print(traceback.format_exc())
+        print(f"{'='*60}\n")
+        return {"success": False, "error": error_msg}
+
+
+async def connect_all_mcp_servers(
+    http_url: str, user_id: str, servers: list[dict], api_key: str | None = None
+) -> dict[str, dict]:
+    """Connect to all enabled MCP servers."""
+    results = {}
+    for server in servers:
+        name = server.get("name")
+        disabled = server.get("disabled", False)
+        if not disabled and name:
+            result = await connect_mcp_server(http_url, user_id, name, api_key)
+            results[name] = result
+    return results
+
+
+# Chat functions
+def chat_websocket_sync(ws_url: str, session_id: str, user_id: str, message: str) -> str:
+    """Send chat message via WebSocket and collect response."""
+    uri = f"{ws_url}/ws/chat/{session_id}"
+    full_response = ""
+
+    try:
+        ws = websocket.create_connection(uri, timeout=60)
+
+        connected_msg = ws.recv()
+        connected_data = json.loads(connected_msg)
+        if connected_data.get("event_type") != "connected":
+            return f"Connection failed: {connected_data}"
+
+        ws.send(
+            json.dumps(
+                {"type": "chat", "payload": {"message": message, "user_id": user_id}}
+            )
+        )
+
+        while True:
+            try:
+                msg = ws.recv()
+                event = json.loads(msg)
+                event_type = event.get("event_type")
+                data = event.get("data", {})
+
+                if event_type == "text":
+                    full_response += data.get("content", "")
+                elif event_type == "tool_call":
+                    tool_name = data.get("tool_name", "unknown")
+                    full_response += f"\n\n🔧 `{tool_name}`\n"
+                elif event_type == "tool_result":
+                    status = data.get("status", "unknown")
+                    icon = "✅" if status == "success" else "❌"
+                    result = str(data.get("result", ""))[:200]
+                    full_response += f"{icon} {result}\n"
+                elif event_type == "hitl":
+                    ws.send(
+                        json.dumps(
+                            {
+                                "type": "hitl_decision",
+                                "payload": {"decisions": [{"type": "approve"}]},
+                            }
+                        )
+                    )
+                elif event_type == "error":
+                    full_response += f"\n\n❌ {data.get('message', 'Error')}\n"
+                elif event_type == "done":
+                    break
+
+            except websocket.WebSocketTimeoutException:
+                full_response += "\n\n⚠️ *Timeout*"
+                break
+
+        ws.close()
+
+    except Exception as e:
+        full_response = f"❌ Error: {e}"
+
+    return full_response
+
+
+def send_chat_rest(
+    http_url: str,
+    session_id: str,
+    user_id: str,
+    message: str,
+    api_key: str | None = None,
+) -> str:
+    """Send chat message via REST API."""
+    headers = {"Content-Type": "application/json", "X-User-ID": user_id}
+    if api_key:
+        headers["X-API-Key"] = api_key
+
+    try:
+        with httpx.Client(timeout=60.0) as client:
+            response = client.post(
+                f"{http_url}/api/v1/chat",
+                headers=headers,
+                json={"session_id": session_id, "message": message},
+            )
+            if response.status_code == 200:
+                data = response.json()
+                events = data.get("events", [])
+                text_parts = []
+                for event in events:
+                    if event.get("event_type") == "text":
+                        text_parts.append(event.get("data", {}).get("content", ""))
+                return "".join(text_parts) or "No response"
+            return f"❌ Error: {response.status_code} - {response.text}"
+    except Exception as e:
+        return f"❌ Error: {e}"
+
+
+def render_mcp_server_row(server: dict, http_url: str, api_key: str | None):
+    """Render a single MCP server row (Cursor style)."""
+    name = server.get("name", "unknown")
+    status = server.get("status", "unknown")
+    disabled = server.get("disabled", False)
+    tools_count = server.get("tools_count", 0)
+    error = server.get("error")
+
+    # Status indicator
+    if status == "connected":
+        status_icon = "🟢"
+        status_text = f"{tools_count} tools"
+    elif status == "disabled":
+        status_icon = "⚪"
+        status_text = "Disabled"
+    elif status == "error":
+        status_icon = "🔴"
+        status_text = "Error"
+    else:
+        status_icon = "🟡"
+        status_text = "Disconnected"
+
+    # Row layout: [name + status] [connect] [delete] [toggle]
+    col1, col2, col3, col4 = st.columns([4, 1, 1, 1])
+
+    with col1:
+        # Name with first letter as icon
+        first_letter = name[0].upper() if name else "M"
+        st.markdown(f"**{first_letter}** &nbsp; {name}")
+        # Status with error expandable
+        if error and status == "error":
+            with st.expander(f"{status_icon} {status_text} - Show Output", expanded=False):
+                st.code(error, language=None)
+        else:
+            st.caption(f"{status_icon} {status_text}")
+
+    with col2:
+        # Test connection button
+        if not disabled:
+            if st.button("🔗", key=f"conn_{name}", help="测试连接"):
+                with st.spinner("连接中..."):
+                    # 构建请求 URL 用于显示
+                    connect_url = f"{http_url}/api/v1/users/{st.session_state.user_id}/mcp-servers/{name}/connect"
+                    st.info(f"📡 请求: POST {connect_url}")
+
+                    result = asyncio.run(
+                        connect_mcp_server(
+                            http_url, st.session_state.user_id, name, api_key
+                        )
+                    )
+
+                    # 显示完整响应
+                    st.code(json.dumps(result, indent=2, ensure_ascii=False), language="json")
+
+                if result.get("success"):
+                    st.success(f"✅ {name} 连接成功，{result.get('tools_count', 0)} 个工具")
+                    st.session_state.mcp_servers = []
+                    st.rerun()
+                else:
+                    st.error(f"❌ {name} 连接失败: {result.get('error', 'Unknown error')}")
+
+    with col3:
+        # Delete button
+        if st.button("🗑️", key=f"del_{name}", help="删除"):
+            success, msg = asyncio.run(
+                delete_mcp_server(http_url, st.session_state.user_id, name, api_key)
+            )
+            if success:
+                st.session_state.mcp_servers = []
+                st.rerun()
+
+    with col4:
+        # Toggle switch
+        is_enabled = not disabled
+        new_enabled = st.toggle(
+            "启用",
+            value=is_enabled,
+            key=f"toggle_{name}",
+            label_visibility="collapsed",
+        )
+        if new_enabled != is_enabled:
+            success, _ = asyncio.run(
+                toggle_mcp_server(
+                    http_url, st.session_state.user_id, name, not new_enabled, api_key
+                )
+            )
+            if success:
+                st.session_state.mcp_servers = []
+                st.rerun()
+
+
+def servers_to_json(servers: list[dict]) -> str:
+    """Convert server list to JSON config format."""
+    mcp_servers = {}
+    for s in servers:
+        config = {}
+        if s.get("url"):
+            config["url"] = s["url"]
+            # 添加 transport 类型
+            if s.get("transport") and s.get("transport") != "sse":
+                config["transport"] = s["transport"]
+        else:
+            if s.get("command"):
+                config["command"] = s["command"]
+            if s.get("args"):
+                config["args"] = s["args"]
+        if s.get("env"):
+            config["env"] = s["env"]
+        if s.get("headers"):
+            config["headers"] = s["headers"]
+        if s.get("disabled"):
+            config["disabled"] = True
+        mcp_servers[s["name"]] = config
+    return json.dumps({"mcpServers": mcp_servers}, indent=2, ensure_ascii=False)
+
+
+def render_mcp_management(http_url: str, api_key: str | None):
+    """Render MCP management section (Cursor style)."""
+    st.subheader("🔌 MCP Servers")
+
+    # Load servers
+    if not st.session_state.mcp_servers:
+        st.session_state.mcp_servers = asyncio.run(
+            load_mcp_servers(http_url, st.session_state.user_id, api_key)
+        )
+
+    servers = st.session_state.mcp_servers
+
+    # Tab: List view / JSON config
+    tab1, tab2 = st.tabs(["📋 服务器列表", "📝 JSON 配置"])
+
+    with tab1:
+        # Buttons row
+        col_refresh, col_connect_all = st.columns(2)
+        with col_refresh:
+            if st.button("🔄 刷新状态", key="refresh_mcp", use_container_width=True):
+                st.session_state.mcp_servers = asyncio.run(
+                    load_mcp_servers(http_url, st.session_state.user_id, api_key)
+                )
+                st.rerun()
+        with col_connect_all:
+            if st.button("🔗 连接全部", key="connect_all_mcp", use_container_width=True):
+                with st.spinner("正在连接所有服务器..."):
+                    results = asyncio.run(
+                        connect_all_mcp_servers(
+                            http_url, st.session_state.user_id, servers, api_key
+                        )
+                    )
+                    success_count = sum(1 for r in results.values() if r.get("success"))
+                    total = len(results)
+                    if success_count == total and total > 0:
+                        st.success(f"✅ 全部连接成功 ({success_count}/{total})")
+                    elif success_count > 0:
+                        st.warning(f"⚠️ 部分连接成功 ({success_count}/{total})")
+                    elif total > 0:
+                        st.error(f"❌ 连接失败 (0/{total})")
+                    st.session_state.mcp_servers = asyncio.run(
+                        load_mcp_servers(http_url, st.session_state.user_id, api_key)
+                    )
+                    st.rerun()
+
+        # Server list
+        if servers:
+            for server in servers:
+                render_mcp_server_row(server, http_url, api_key)
+        else:
+            st.info("暂无 MCP 服务器，请在 JSON 配置中添加")
+
+    with tab2:
+        st.caption("使用 JSON 格式配置 MCP 服务器")
+
+        # Initialize mcp_json in session state
+        if "mcp_json" not in st.session_state:
+            st.session_state.mcp_json = servers_to_json(servers) if servers else '{\n  "mcpServers": {}\n}'
+
+        # Load from server button
+        if st.button("📥 从服务器加载", key="load_json"):
+            servers = asyncio.run(
+                load_mcp_servers(http_url, st.session_state.user_id, api_key)
+            )
+            st.session_state.mcp_json = servers_to_json(servers)
+            st.session_state.mcp_servers = servers
+            st.rerun()
+
+        # JSON editor
+        mcp_json = st.text_area(
+            "mcp.json",
+            value=st.session_state.mcp_json,
+            height=300,
+            key="mcp_json_editor",
+            label_visibility="collapsed",
+        )
+
+        # Save button
+        if st.button("💾 保存配置", key="save_json", use_container_width=True):
+            try:
+                config = json.loads(mcp_json)
+                mcp_servers = config.get("mcpServers", {})
+
+                if not mcp_servers:
+                    st.warning("配置为空")
+                else:
+                    # Delete all existing servers first
+                    for s in st.session_state.mcp_servers:
+                        asyncio.run(
+                            delete_mcp_server(
+                                http_url, st.session_state.user_id, s["name"], api_key
+                            )
+                        )
+
+                    # Save new servers
+                    success_count = 0
+                    for name, cfg in mcp_servers.items():
+                        server_data = {
+                            "name": name,
+                            "command": cfg.get("command", ""),
+                            "args": cfg.get("args", []),
+                            "env": cfg.get("env", {}),
+                            "url": cfg.get("url"),
+                            "transport": cfg.get("transport", "sse"),
+                            "headers": cfg.get("headers", {}),
+                            "disabled": cfg.get("disabled", False),
+                        }
+                        success, _ = asyncio.run(
+                            save_mcp_server(
+                                http_url, st.session_state.user_id, server_data, api_key
+                            )
+                        )
+                        if success:
+                            success_count += 1
+
+                    st.success(f"✅ 已保存 {success_count} 个服务器")
+                    st.session_state.mcp_json = mcp_json
+                    st.session_state.mcp_servers = []
+                    st.info("💡 新建会话后生效")
+                    st.rerun()
+
+            except json.JSONDecodeError as e:
+                st.error(f"❌ JSON 格式错误: {e}")
+
+        # Example
+        with st.expander("📖 配置示例"):
+            st.code(
+                """{
+  "mcpServers": {
+    "my-server": {
+      "url": "http://localhost:9042/mcp",
+      "transport": "streamable_http",
+      "headers": {
+        "X-API-Key": "your-api-key",
+        "X-Custom-Header": "value"
+      }
+    },
+    "sse-server": {
+      "url": "http://localhost:8080/sse"
+    },
+    "filesystem": {
+      "command": "uvx",
+      "args": ["mcp-server-filesystem", "/workspace"]
+    }
+  }
+}""",
+                language="json",
+            )
+            st.caption("transport: 'sse'(默认) 或 'streamable_http'")
 
 
 def render_sidebar():
-    """Render sidebar with configuration."""
+    """Render sidebar with server config and session controls."""
     with st.sidebar:
-        st.header("⚙️ Configuration")
+        st.title("⚙️ 设置")
 
-        # Server settings
-        st.subheader("Server")
+        # Server Configuration
+        st.subheader("服务器配置")
         host = st.text_input("Host", value="localhost")
         port = st.number_input("Port", value=8000, min_value=1, max_value=65535)
-        use_ssl = st.checkbox("Use SSL", value=False)
-        api_key = st.text_input("API Key (optional)", type="password")
+        use_ssl = st.checkbox("使用 SSL", value=False)
+        api_key = st.text_input("API Key (可选)", type="password")
 
         http_url, ws_url = get_server_url(host, port, use_ssl)
 
-        # Connection test
-        if st.button("🔍 Check Health"):
-            with st.spinner("Checking..."):
-                health = asyncio.run(check_health(http_url, api_key))
-                if health:
-                    st.success(f"✅ Server healthy: v{health.get('version', 'unknown')}")
-                else:
-                    st.error("❌ Server unreachable")
+        if st.button("🔍 检查连接"):
+            health = asyncio.run(check_health(http_url, api_key))
+            if health:
+                st.success(f"✅ 服务器正常")
+            else:
+                st.error("❌ 无法连接服务器")
 
         st.divider()
 
-        # Session settings
-        st.subheader("Session")
-        st.text_input(
-            "Session ID",
-            value=st.session_state.session_id,
-            key="session_id_input",
-            on_change=lambda: setattr(
-                st.session_state,
-                "session_id",
-                st.session_state.session_id_input,
-            ),
-        )
+        # User ID
+        st.subheader("用户配置")
+        user_id = st.text_input("User ID", value=st.session_state.user_id)
+        if user_id != st.session_state.user_id:
+            st.session_state.user_id = user_id
+            st.session_state.mcp_servers = []  # Reset MCP servers
+
+        st.divider()
+
+        # Session Controls
+        st.subheader("会话管理")
+        st.text_input("Session ID", value=st.session_state.session_id, disabled=True)
 
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("🔄 New Session"):
+            if st.button("🔄 新建会话"):
                 st.session_state.session_id = str(uuid.uuid4())
                 st.session_state.messages = []
                 st.rerun()
         with col2:
-            if st.button("🗑️ Clear Chat"):
+            if st.button("🗑️ 清空消息"):
                 st.session_state.messages = []
                 st.rerun()
 
         st.divider()
 
-        # Communication mode
-        st.subheader("Mode")
-        mode = st.radio(
-            "Communication",
-            ["WebSocket (Streaming)", "REST API"],
-            index=0,
-        )
+        # Communication Mode
+        st.subheader("通信模式")
+        mode = st.radio("选择模式", ["WebSocket", "REST API"], horizontal=True)
 
         st.divider()
 
-        # Session browser
-        st.subheader("📋 Sessions")
-        if st.button("Load Sessions"):
-            with st.spinner("Loading..."):
-                sessions = asyncio.run(get_sessions(http_url, api_key))
-                if sessions:
-                    for s in sessions[:10]:
-                        sid = s.get("session_id", "")[:8]
-                        if st.button(f"📝 {sid}...", key=f"session_{sid}"):
-                            st.session_state.session_id = s.get("session_id")
-                            st.session_state.messages = []
-                            st.rerun()
-                else:
-                    st.info("No sessions found")
+        # MCP Management
+        render_mcp_management(http_url, api_key)
 
-        return http_url, ws_url, api_key, mode
-
-
-def render_mcp_config(http_url: str, api_key: str | None):
-    """Render MCP configuration panel."""
-    st.subheader("🔌 MCP Server 配置")
-    st.caption("配置 Model Context Protocol 服务器以扩展 Agent 工具能力")
-
-    # User ID for MCP config (using session_id as user_id for demo)
-    user_id = st.session_state.get("user_id", "demo-user")
-
-    # Load existing MCP servers
-    with st.spinner("加载 MCP 配置..."):
-        mcp_servers = asyncio.run(get_mcp_servers(http_url, user_id, api_key))
-
-    if mcp_servers:
-        st.write("**已配置的 MCP Servers:**")
-        for server in mcp_servers:
-            with st.expander(f"🔧 {server.get('name', 'unknown')}", expanded=False):
-                st.code(json.dumps(server, indent=2, ensure_ascii=False), language="json")
-                status = server.get("status", "unknown")
-                status_icon = "🟢" if status == "connected" else "🔴"
-                st.caption(f"状态: {status_icon} {status}")
-                if st.button(f"删除 {server.get('name')}", key=f"del_{server.get('name')}"):
-                    if asyncio.run(delete_mcp_server(http_url, user_id, server.get("name"), api_key)):
-                        st.success("已删除")
-                        st.rerun()
-                    else:
-                        st.error("删除失败")
-    else:
-        st.info("暂无 MCP Server 配置（API 功能开发中）")
-
-    st.divider()
-
-    # Add new MCP server
-    st.write("**添加新的 MCP Server:**")
-
-    with st.form("add_mcp_server"):
-        name = st.text_input("名称", placeholder="例如: filesystem, database")
-        command = st.text_input("命令", placeholder="例如: uvx, npx, python")
-        args = st.text_input("参数 (JSON 数组)", placeholder='["mcp-server-filesystem", "/workspace"]')
-        env_str = st.text_input("环境变量 (JSON 对象)", placeholder='{"KEY": "value"}')
-        disabled = st.checkbox("禁用")
-
-        submitted = st.form_submit_button("➕ 添加 MCP Server")
-        if submitted:
-            if not name or not command:
-                st.error("名称和命令为必填项")
-            else:
-                try:
-                    args_list = json.loads(args) if args else []
-                    env_dict = json.loads(env_str) if env_str else {}
-
-                    server_config = {
-                        "name": name,
-                        "command": command,
-                        "args": args_list,
-                        "env": env_dict,
-                        "disabled": disabled,
-                    }
-
-                    if asyncio.run(add_mcp_server(http_url, user_id, server_config, api_key)):
-                        st.success(f"已添加 MCP Server: {name}")
-                        st.rerun()
-                    else:
-                        st.warning("添加失败（API 功能开发中）")
-                except json.JSONDecodeError as e:
-                    st.error(f"JSON 格式错误: {e}")
-
-    # Example configurations
-    with st.expander("📖 配置示例"):
-        st.markdown("""
-**文件系统 MCP Server:**
-```json
-{
-  "name": "filesystem",
-  "command": "uvx",
-  "args": ["mcp-server-filesystem", "/workspace"],
-  "env": {},
-  "disabled": false
-}
-```
-
-**数据库 MCP Server:**
-```json
-{
-  "name": "mysql",
-  "command": "uvx",
-  "args": ["mcp-server-mysql"],
-  "env": {
-    "MYSQL_HOST": "localhost",
-    "MYSQL_USER": "root",
-    "MYSQL_PASSWORD": "password"
-  },
-  "disabled": false
-}
-```
-
-**自定义 Python MCP Server:**
-```json
-{
-  "name": "custom",
-  "command": "python",
-  "args": ["-m", "my_mcp_server"],
-  "env": {"API_KEY": "xxx"},
-  "disabled": false
-}
-```
-        """)
-
-
-def render_chat(http_url: str, ws_url: str, api_key: str | None, mode: str):
-    """Render main chat interface."""
-    st.title("🤖 DataAgent Server Demo")
-
-    # Tabs for Chat and MCP Config
-    tab_chat, tab_mcp = st.tabs(["💬 对话", "🔌 MCP 配置"])
-
-    with tab_chat:
-        st.caption(f"Session: `{st.session_state.session_id[:8]}...`")
-
-        # Display chat history
-        for msg in st.session_state.messages:
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
-
-        # Chat input
-        if prompt := st.chat_input("Type your message..."):
-            # Add user message
-            st.session_state.messages.append({"role": "user", "content": prompt})
-            with st.chat_message("user"):
-                st.markdown(prompt)
-
-            # Get assistant response
-            with st.chat_message("assistant"):
-                message_placeholder = st.empty()
-
-                if mode == "WebSocket (Streaming)":
-                    message_placeholder.markdown("Connecting...")
-                    response = chat_websocket_sync(
-                        ws_url,
-                        st.session_state.session_id,
-                        prompt,
-                    )
-                    message_placeholder.markdown(response)
-                else:
-                    message_placeholder.markdown("Thinking...")
-                    result = asyncio.run(
-                        send_chat_rest(
-                            http_url,
-                            prompt,
-                            st.session_state.session_id,
-                            api_key,
-                        )
-                    )
-                    if result:
-                        events = result.get("events", [])
-                        response = ""
-                        for event in events:
-                            if event.get("event_type") == "text":
-                                response += event.get("data", {}).get("content", "")
-                        message_placeholder.markdown(response or "No response")
-                    else:
-                        response = "Failed to get response"
-                        message_placeholder.markdown(response)
-
-                if response:
-                    st.session_state.messages.append({
-                        "role": "assistant",
-                        "content": response,
-                    })
-
-    with tab_mcp:
-        render_mcp_config(http_url, api_key)
+    return http_url, ws_url, api_key, mode
 
 
 def main():
-    """Main entry point."""
+    """Main application entry point."""
     init_session_state()
+
+    # Render sidebar and get config
     http_url, ws_url, api_key, mode = render_sidebar()
-    render_chat(http_url, ws_url, api_key, mode)
+
+    # Main chat area
+    st.title("🤖 DataAgent Demo")
+
+    # Show session info
+    st.caption(f"📍 Session: `{st.session_state.session_id[:8]}...` | User: `{st.session_state.user_id}`")
+
+    # Display chat messages
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    # Chat input
+    if prompt := st.chat_input("输入消息..."):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        with st.chat_message("assistant"):
+            with st.spinner("思考中..."):
+                if mode == "WebSocket":
+                    response = chat_websocket_sync(
+                        ws_url, st.session_state.session_id, st.session_state.user_id, prompt
+                    )
+                else:
+                    response = send_chat_rest(
+                        http_url, st.session_state.session_id, st.session_state.user_id, prompt, api_key
+                    )
+
+            st.markdown(response)
+            st.session_state.messages.append({"role": "assistant", "content": response})
 
 
 if __name__ == "__main__":
