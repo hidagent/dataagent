@@ -1,0 +1,4 @@
+# file: /Users/dszhao/source/deepagents/libs/dataagent-server/dataagent_server/ws/handlers.py
+# hypothesis_version: 6.148.7
+
+[300, 1013, 'EMPTY_DECISION', 'EMPTY_MESSAGE', 'EXECUTION_ERROR', 'EXECUTOR_ERROR', 'INTERNAL_ERROR', 'INVALID_MESSAGE', 'NO_PENDING_DECISION', 'Service at capacity', 'UNKNOWN_MESSAGE_TYPE', 'action', 'cancel', 'cancelled', 'chat', 'connected', 'content', 'data', 'decisions', 'done', 'error', 'error_code', 'event_type', 'hitl', 'hitl_decision', 'is_final', 'message', 'no_active_task', 'payload', 'ping', 'pong', 'reason', 'recoverable', 'reject', 'session_id', 'task_cancelled', 'text', 'timestamp', 'token_usage', 'type', 'user_cancelled']

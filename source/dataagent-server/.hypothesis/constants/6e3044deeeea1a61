@@ -1,0 +1,4 @@
+# file: /Users/dszhao/source/deepagents/libs/dataagent-core/dataagent_core/engine/factory.py
+# hypothesis_version: 6.148.7
+
+[500, 1000, '...', '/workspace', 'Create', 'N/A', 'Overwrite', 'agent.md', 'allowed_decisions', 'approve', 'args', 'command', 'content', 'description', 'edit_file', 'execute', 'fetch_url', 'file_path', 'max_results', 'query', 'recursion_limit', 'reject', 'replace_all', 'shell', 'subagent_type', 'task', 'timeout', 'unknown', 'url', 'web_search', 'write_file']

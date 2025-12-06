@@ -1,0 +1,4 @@
+# file: /Users/dszhao/source/deepagents/libs/dataagent-server/dataagent_server/hitl/websocket_handler.py
+# hypothesis_version: 6.148.7
+
+[300, 'action_request', 'data', 'event_type', 'hitl_request', 'message', 'reject', 'timestamp', 'type']

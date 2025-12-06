@@ -1,0 +1,4 @@
+# file: /Users/dszhao/source/deepagents/libs/dataagent-server/dataagent_server/models/common.py
+# hypothesis_version: 6.148.7
+
+['Cancellation status', 'Event data', 'Event timestamp', 'Message payload', 'Service version']

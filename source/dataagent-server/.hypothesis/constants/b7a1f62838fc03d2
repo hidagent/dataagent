@@ -1,0 +1,4 @@
+# file: /Users/dszhao/source/deepagents/libs/dataagent-server/dataagent_server/config/settings.py
+# hypothesis_version: 6.148.7
+
+[200, 300, 3306, 3600, 8000, '*', '.env', '0.0.0.0', 'DATAAGENT_', 'dataagent', 'ignore', 'localhost', 'memory', 'mysql', 'root', 'utf-8']

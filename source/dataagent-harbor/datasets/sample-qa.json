@@ -1,0 +1,91 @@
+{
+  "name": "sample-qa-test",
+  "description": "Sample Q&A test cases for DataAgent Server",
+  "version": "1.0",
+  "questions": [
+    {
+      "id": "general-001",
+      "question": "What is Python?",
+      "expected_keywords": ["programming", "language"],
+      "category": "general",
+      "difficulty": "easy",
+      "timeout": 60
+    },
+    {
+      "id": "general-002",
+      "question": "What is machine learning?",
+      "expected_keywords": ["algorithm", "data", "learn"],
+      "category": "general",
+      "difficulty": "easy",
+      "timeout": 60
+    },
+    {
+      "id": "python-001",
+      "question": "How do I create a list in Python?",
+      "expected_keywords": ["list", "[]"],
+      "category": "python",
+      "difficulty": "easy",
+      "timeout": 60
+    },
+    {
+      "id": "python-002",
+      "question": "What is the difference between a list and a tuple in Python?",
+      "expected_keywords": ["list", "tuple", "mutable"],
+      "category": "python",
+      "difficulty": "medium",
+      "timeout": 90
+    },
+    {
+      "id": "python-003",
+      "question": "How do I read a file in Python?",
+      "expected_keywords": ["open", "read", "file"],
+      "category": "python",
+      "difficulty": "easy",
+      "timeout": 60
+    },
+    {
+      "id": "data-001",
+      "question": "What is a DataFrame in pandas?",
+      "expected_keywords": ["pandas", "data", "table"],
+      "category": "data",
+      "difficulty": "medium",
+      "timeout": 90
+    },
+    {
+      "id": "data-002",
+      "question": "How do I filter rows in a pandas DataFrame?",
+      "expected_keywords": ["filter", "condition", "loc"],
+      "category": "data",
+      "difficulty": "medium",
+      "timeout": 90
+    },
+    {
+      "id": "sql-001",
+      "question": "What is a JOIN in SQL?",
+      "expected_keywords": ["join", "table", "combine"],
+      "category": "sql",
+      "difficulty": "medium",
+      "timeout": 90
+    },
+    {
+      "id": "sql-002",
+      "question": "What is the difference between INNER JOIN and LEFT JOIN?",
+      "expected_keywords": ["inner", "left", "match"],
+      "category": "sql",
+      "difficulty": "medium",
+      "timeout": 90
+    },
+    {
+      "id": "advanced-001",
+      "question": "Explain the concept of decorators in Python.",
+      "expected_keywords": ["decorator", "function", "wrapper"],
+      "category": "advanced",
+      "difficulty": "hard",
+      "timeout": 120
+    }
+  ],
+  "metadata": {
+    "author": "DataAgent Team",
+    "created_at": "2024-01-01"
+  }
+}

@@ -1,0 +1,4 @@
+# file: /Users/dszhao/source/deepagents/libs/dataagent-core/dataagent_core/session/factory.py
+# hypothesis_version: 6.148.7
+
+[3600, 'engine', 'max_overflow', 'memory', 'mysql', 'pool_recycle', 'pool_size', 'url']

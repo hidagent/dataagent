@@ -1,0 +1,4 @@
+# file: /Users/dszhao/source/deepagents/libs/dataagent-server/dataagent_server/models/chat.py
+# hypothesis_version: 6.148.7
+
+[100, 'Additional metadata', 'Assistant identifier', 'List of messages', 'List of sessions', 'Message content', 'Session identifier', 'User identifier']

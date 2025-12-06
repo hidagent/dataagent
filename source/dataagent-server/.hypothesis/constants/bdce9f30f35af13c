@@ -1,0 +1,4 @@
+# file: /Users/dszhao/source/deepagents/libs/dataagent-core/dataagent_core/tools/file_tracker.py
+# hypothesis_version: 6.148.7
+
+[100, 800, '(unknown)', '+', '+++', '-', '---', '...', '.deepagents', '/', '/memories/', 'edit_file', 'error', 'file_path', 'limit', 'offset', 'path', 'pending', 'read_file', 'status', 'success', 'tool_call_id', 'utf-8', 'write_file']

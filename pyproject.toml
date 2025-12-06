@@ -1,0 +1,12 @@
+[tool.pytest.ini_options]
+# Use importlib mode to avoid module name conflicts across multiple packages
+pythonpath = ["."]
+testpaths = [
+    "libs/dataagent-core/tests",
+    "libs/dataagent-server/tests",
+    "libs/dataagent-harbor/tests",
+]
+# Prevent conftest.py conflicts by using unique namespace
+addopts = "--import-mode=importlib"
+# Treat each test directory as a namespace package
+consider_namespace_packages = true
