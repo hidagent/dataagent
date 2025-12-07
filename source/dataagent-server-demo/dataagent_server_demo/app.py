@@ -27,6 +27,13 @@ def init_session_state():
         st.session_state.user_id = "dataagent"
     if "mcp_servers" not in st.session_state:
         st.session_state.mcp_servers = []
+    # User profile fields
+    if "user_display_name" not in st.session_state:
+        st.session_state.user_display_name = ""
+    if "user_department" not in st.session_state:
+        st.session_state.user_department = ""
+    if "user_role" not in st.session_state:
+        st.session_state.user_role = ""
 
 
 def get_server_url(host: str, port: int, use_ssl: bool = False) -> tuple[str, str]:
@@ -269,7 +276,10 @@ def chat_websocket_sync(ws_url: str, session_id: str, user_id: str, message: str
     return full_response
 
 
-def chat_websocket_streaming(ws_url: str, session_id: str, user_id: str, message: str, placeholder) -> str:
+def chat_websocket_streaming(
+    ws_url: str, session_id: str, user_id: str, message: str, placeholder,
+    user_context: dict | None = None
+) -> str:
     """Send chat message via WebSocket with real-time streaming display.
     
     Args:
@@ -278,6 +288,7 @@ def chat_websocket_streaming(ws_url: str, session_id: str, user_id: str, message
         user_id: User ID
         message: User message
         placeholder: Streamlit placeholder for real-time updates
+        user_context: Optional user context for personalization
         
     Returns:
         Final response string
@@ -301,11 +312,12 @@ def chat_websocket_streaming(ws_url: str, session_id: str, user_id: str, message
         if connected_data.get("event_type") != "connected":
             return f"Connection failed: {connected_data}"
 
-        ws.send(
-            json.dumps(
-                {"type": "chat", "payload": {"message": message, "user_id": user_id}}
-            )
-        )
+        # Build chat payload with user context
+        chat_payload = {"message": message, "user_id": user_id}
+        if user_context:
+            chat_payload["user_context"] = user_context
+        
+        ws.send(json.dumps({"type": "chat", "payload": chat_payload}))
 
         current_status = "正在思考..."
         update_display()
@@ -711,12 +723,41 @@ def render_sidebar():
 
         st.divider()
 
-        # User ID
-        st.subheader("用户配置")
+        # User Profile Configuration
+        st.subheader("👤 用户信息")
         user_id = st.text_input("User ID", value=st.session_state.user_id)
         if user_id != st.session_state.user_id:
             st.session_state.user_id = user_id
             st.session_state.mcp_servers = []  # Reset MCP servers
+        
+        # User profile fields for personalization
+        with st.expander("📝 个人信息（用于AI个性化）", expanded=False):
+            display_name = st.text_input(
+                "姓名", 
+                value=st.session_state.user_display_name,
+                placeholder="例如：张三",
+                help="AI将使用此姓名来识别'我'指代的用户"
+            )
+            if display_name != st.session_state.user_display_name:
+                st.session_state.user_display_name = display_name
+            
+            department = st.text_input(
+                "部门",
+                value=st.session_state.user_department,
+                placeholder="例如：数据部",
+            )
+            if department != st.session_state.user_department:
+                st.session_state.user_department = department
+            
+            role = st.text_input(
+                "角色",
+                value=st.session_state.user_role,
+                placeholder="例如：数据工程师",
+            )
+            if role != st.session_state.user_role:
+                st.session_state.user_role = role
+            
+            st.caption("💡 设置后，AI将能够回答'我是谁'并理解'我的'指代")
 
         st.divider()
 
@@ -759,8 +800,11 @@ def main():
     # Main chat area
     st.title("🤖 DataAgent Demo")
 
-    # Show session info
-    st.caption(f"📍 Session: `{st.session_state.session_id[:8]}...` | User: `{st.session_state.user_id}`")
+    # Show session info with user display name if set
+    user_info = st.session_state.user_id
+    if st.session_state.user_display_name:
+        user_info = f"{st.session_state.user_display_name} ({st.session_state.user_id})"
+    st.caption(f"📍 Session: `{st.session_state.session_id[:8]}...` | User: `{user_info}`")
 
     # Display chat messages
     for msg in st.session_state.messages:
@@ -773,13 +817,25 @@ def main():
         with st.chat_message("user"):
             st.markdown(prompt)
 
+        # Build user context if profile is configured
+        user_context = None
+        if st.session_state.user_display_name:
+            user_context = {
+                "user_id": st.session_state.user_id,
+                "username": st.session_state.user_id,
+                "display_name": st.session_state.user_display_name,
+                "department": st.session_state.user_department or None,
+                "role": st.session_state.user_role or None,
+                "is_anonymous": False,
+            }
+
         with st.chat_message("assistant"):
             if mode == "WebSocket":
                 # 使用流式显示
                 response_placeholder = st.empty()
                 response = chat_websocket_streaming(
                     ws_url, st.session_state.session_id, st.session_state.user_id, 
-                    prompt, response_placeholder
+                    prompt, response_placeholder, user_context
                 )
             else:
                 # REST API 模式使用 spinner

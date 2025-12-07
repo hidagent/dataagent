@@ -19,7 +19,7 @@ from langgraph.pregel import Pregel
 from langgraph.runtime import Runtime
 
 from dataagent_core.config import Settings, get_default_coding_instructions
-from dataagent_core.middleware import AgentMemoryMiddleware, SkillsMiddleware, ShellMiddleware
+from dataagent_core.middleware import AgentMemoryMiddleware, SkillsMiddleware, ShellMiddleware, RulesMiddleware
 from dataagent_core.tools import http_request, fetch_url, web_search
 
 
@@ -31,6 +31,8 @@ class AgentConfig:
     enable_memory: bool = True
     enable_skills: bool = True
     enable_shell: bool = True
+    enable_rules: bool = True  # Enable agent rules
+    rules_debug_mode: bool = False  # Enable rules debug mode
     auto_approve: bool = False
     sandbox_type: str | None = None
     sandbox_id: str | None = None
@@ -268,6 +270,29 @@ class AgentFactory:
                         project_skills_dir=project_skills_dir,
                     )
                 )
+
+        # Add rules middleware if enabled
+        if config.enable_rules:
+            from dataagent_core.rules import FileRuleStore
+            
+            # Setup rule store with global, user, and project directories
+            global_rules_dir = self.settings.user_deepagents_dir / "rules"
+            user_rules_dir = self.settings.get_agent_dir(config.assistant_id) / "rules"
+            project_rules_dir = None
+            if self.settings.project_root:
+                project_rules_dir = self.settings.project_root / ".dataagent" / "rules"
+            
+            rule_store = FileRuleStore(
+                global_dir=global_rules_dir,
+                user_dir=user_rules_dir,
+                project_dir=project_rules_dir,
+            )
+            middleware.append(
+                RulesMiddleware(
+                    store=rule_store,
+                    debug_mode=config.rules_debug_mode,
+                )
+            )
 
         middleware.extend(config.extra_middleware)
 
