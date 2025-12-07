@@ -111,6 +111,28 @@ test-cov:
 test-file:
 	pytest $(FILE) -v
 
+# Run multi-tenant isolation tests
+test-isolation:
+	@echo "Initializing test users..."
+	@python scripts/init_test_users.py --verbose
+	@echo ""
+	@echo "Running isolation tests..."
+	pytest source/dataagent-server/tests/test_multi_tenant -v
+
+# Run isolation tests with report
+test-isolation-report:
+	@python scripts/init_test_users.py
+	./scripts/run_isolation_tests.sh --report
+
+# Quick isolation test (critical tests only)
+test-isolation-quick:
+	@python scripts/init_test_users.py
+	pytest source/dataagent-server/tests/test_multi_tenant -v -m "not slow"
+
+# Reset and reinitialize test users
+test-isolation-reset:
+	python scripts/init_test_users.py --reset --verbose
+
 ######################
 # LINTING AND FORMATTING
 ######################
@@ -172,6 +194,12 @@ help:
 	@echo '  make test-harbor      Run harbor tests only'
 	@echo '  make test-cov         Run tests with coverage'
 	@echo '  make test-file FILE=path/to/test.py  Run specific test'
+	@echo ''
+	@echo '-- ISOLATION TESTING (Multi-Tenant Security) --'
+	@echo '  make test-isolation        Run all isolation tests'
+	@echo '  make test-isolation-report Run with HTML report'
+	@echo '  make test-isolation-quick  Run critical tests only'
+	@echo '  make test-isolation-reset  Reset test users'
 	@echo ''
 	@echo '-- CODE QUALITY --'
 	@echo '  make lint             Run linter'
