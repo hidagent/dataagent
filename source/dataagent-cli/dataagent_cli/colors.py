@@ -1,13 +1,15 @@
 """Color scheme and constants for DataAgent CLI."""
 
 # Color scheme
+# Note: "prompt" uses a color that works on both light and dark backgrounds
 COLORS = {
-    "primary": "#10b981",
-    "dim": "#6b7280",
-    "user": "#ffffff",
-    "agent": "#10b981",
-    "thinking": "#34d399",
-    "tool": "#fbbf24",
+    "primary": "#10b981",      # Emerald green - main brand color
+    "dim": "#6b7280",          # Gray - secondary text
+    "user": "#ffffff",         # White - user message text (for dark bg)
+    "agent": "#10b981",        # Emerald green - agent responses
+    "thinking": "#34d399",     # Light green - thinking indicator
+    "tool": "#fbbf24",         # Amber - tool calls
+    "prompt": "#10b981",       # Emerald green - input prompt (works on light/dark)
 }
 
 # ASCII art banner

@@ -1,0 +1,4 @@
+# file: /Users/dszhao/source/dataagent/source/dataagent-core/dataagent_core/user/sqlite_store.py
+# hypothesis_version: 6.148.7
+
+[128, 256, '.dataagent', 'created_at', 'custom_fields', 'dataagent.db', 'user_id', 'user_profiles', 'username']

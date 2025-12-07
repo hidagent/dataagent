@@ -154,6 +154,9 @@ class FilesystemState(AgentState):
 
     files: Annotated[NotRequired[dict[str, FileData]], _file_data_reducer]
     """Files in the filesystem."""
+    
+    working_directory: NotRequired[str]
+    """Working directory for file operations. Defaults to cwd if not set."""
 
 
 LIST_FILES_TOOL_DESCRIPTION = """Lists all files in the filesystem, filtering by directory.
@@ -565,17 +568,23 @@ def _glob_tool_generator(
     """
     tool_description = custom_description or GLOB_TOOL_DESCRIPTION
 
-    def sync_glob(pattern: str, runtime: ToolRuntime[None, FilesystemState], path: str = "/") -> str:
+    def sync_glob(pattern: str, runtime: ToolRuntime[None, FilesystemState], path: str | None = None) -> str:
         """Synchronous wrapper for glob tool."""
         resolved_backend = _get_backend(backend, runtime)
+        # Use working_directory from state if path not specified
+        if path is None:
+            path = runtime.state.get("working_directory", "/")
         infos = resolved_backend.glob_info(pattern, path=path)
         paths = [fi.get("path", "") for fi in infos]
         result = truncate_if_too_long(paths)
         return str(result)
 
-    async def async_glob(pattern: str, runtime: ToolRuntime[None, FilesystemState], path: str = "/") -> str:
+    async def async_glob(pattern: str, runtime: ToolRuntime[None, FilesystemState], path: str | None = None) -> str:
         """Asynchronous wrapper for glob tool."""
         resolved_backend = _get_backend(backend, runtime)
+        # Use working_directory from state if path not specified
+        if path is None:
+            path = runtime.state.get("working_directory", "/")
         infos = await resolved_backend.aglob_info(pattern, path=path)
         paths = [fi.get("path", "") for fi in infos]
         result = truncate_if_too_long(paths)
@@ -613,6 +622,9 @@ def _grep_tool_generator(
     ) -> str:
         """Synchronous wrapper for grep tool."""
         resolved_backend = _get_backend(backend, runtime)
+        # Use working_directory from state if path not specified
+        if path is None:
+            path = runtime.state.get("working_directory")
         raw = resolved_backend.grep_raw(pattern, path=path, glob=glob)
         if isinstance(raw, str):
             return raw
@@ -628,6 +640,9 @@ def _grep_tool_generator(
     ) -> str:
         """Asynchronous wrapper for grep tool."""
         resolved_backend = _get_backend(backend, runtime)
+        # Use working_directory from state if path not specified
+        if path is None:
+            path = runtime.state.get("working_directory")
         raw = await resolved_backend.agrep_raw(pattern, path=path, glob=glob)
         if isinstance(raw, str):
             return raw

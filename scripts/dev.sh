@@ -39,6 +39,10 @@ show_help() {
     echo "  dev [port]        Run Server + Demo together (recommended for development)"
     echo "  test [module]     Run tests (core|server|harbor|all)"
     echo "  install           Install all packages in dev mode"
+    echo "  version           Show all module versions"
+    echo "  version-check     Analyze version changes for all modules"
+    echo "  version-bump      Manually bump a module version"
+    echo "  version-auto      Auto-bump version based on commits"
     echo "  help              Show this help"
     echo ""
     echo -e "${YELLOW}Examples:${NC}"
@@ -54,6 +58,11 @@ show_help() {
     echo "  ./scripts/dev.sh test core              # Run core tests"
     echo "  ./scripts/dev.sh test server            # Run server tests"
     echo "  ./scripts/dev.sh test                   # Run all tests"
+    echo "  ./scripts/dev.sh version                # Show all versions"
+    echo "  ./scripts/dev.sh version-check          # Check all modules for version changes"
+    echo "  ./scripts/dev.sh version-check dataagent-server  # Check specific module"
+    echo "  ./scripts/dev.sh version-bump dataagent-server minor  # Bump to minor"
+    echo "  ./scripts/dev.sh version-auto dataagent-server  # Auto-bump based on commits"
     echo ""
 }
 
@@ -170,6 +179,54 @@ install_dev() {
     echo -e "${GREEN}✓ Installation complete${NC}"
 }
 
+show_versions() {
+    echo -e "${GREEN}DataAgent Module Versions:${NC}"
+    echo ""
+    python3 scripts/version_manager.py show-all
+}
+
+analyze_versions() {
+    local module="${1:-}"
+    
+    if [ -z "$module" ]; then
+        # 分析所有主要模块
+        echo -e "${GREEN}Analyzing version changes for all modules...${NC}"
+        echo ""
+        for mod in dataagent-core dataagent-cli dataagent-server; do
+            echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            python3 scripts/version_manager.py analyze "$mod" 2>/dev/null || echo "  No changes detected"
+            echo ""
+        done
+    else
+        python3 scripts/version_manager.py analyze "$module"
+    fi
+}
+
+bump_version() {
+    local module="$1"
+    local bump_type="$2"
+    
+    if [ -z "$module" ] || [ -z "$bump_type" ]; then
+        echo -e "${RED}Usage: ./scripts/dev.sh version-bump <module> <type>${NC}"
+        echo "  module: dataagent-core, dataagent-cli, dataagent-server, dataagent-harbor"
+        echo "  type: major, minor, patch"
+        exit 1
+    fi
+    
+    python3 scripts/version_manager.py bump "$module" --type "$bump_type"
+}
+
+auto_bump_version() {
+    local module="$1"
+    
+    if [ -z "$module" ]; then
+        echo -e "${RED}Usage: ./scripts/dev.sh version-auto <module>${NC}"
+        exit 1
+    fi
+    
+    python3 scripts/version_manager.py auto-bump "$module"
+}
+
 # 主命令处理
 case "${1:-help}" in
     cli)
@@ -193,6 +250,21 @@ case "${1:-help}" in
         ;;
     install)
         install_dev
+        ;;
+    version)
+        show_versions
+        ;;
+    version-check)
+        shift
+        analyze_versions "$@"
+        ;;
+    version-bump)
+        shift
+        bump_version "$@"
+        ;;
+    version-auto)
+        shift
+        auto_bump_version "$@"
         ;;
     help|--help|-h)
         show_help

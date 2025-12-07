@@ -1,0 +1,4 @@
+# file: /Users/dszhao/source/dataagent/source/dataagent-core/dataagent_core/engine/executor.py
+# hypothesis_version: 6.148.7
+
+['__interrupt__', 'action_requests', 'approve', 'args', 'args_parts', 'assistant_id', 'chunk_position', 'configurable', 'content', 'content_blocks', 'decisions', 'exit', 'id', 'index', 'last', 'lines_added', 'lines_read', 'lines_removed', 'lines_written', 'messages', 'metadata', 'name', 'reject', 'role', 'status', 'success', 'text', 'thread_id', 'todos', 'tool_call', 'tool_call_chunk', 'type', 'updates', 'user', 'value']

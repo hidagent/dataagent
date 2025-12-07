@@ -153,6 +153,40 @@ typecheck:
 	mypy source/dataagent-server/dataagent_server
 
 ######################
+# VERSION MANAGEMENT
+######################
+
+# Show all module versions
+version:
+	python scripts/version_manager.py show-all
+
+# Analyze version changes for a module
+version-analyze:
+	@if [ -z "$(MODULE)" ]; then \
+		echo "Usage: make version-analyze MODULE=dataagent-server"; \
+		echo "Available modules: dataagent-core, dataagent-cli, dataagent-server, dataagent-harbor"; \
+	else \
+		python scripts/version_manager.py analyze $(MODULE); \
+	fi
+
+# Bump version manually
+version-bump:
+	@if [ -z "$(MODULE)" ] || [ -z "$(TYPE)" ]; then \
+		echo "Usage: make version-bump MODULE=dataagent-server TYPE=minor"; \
+		echo "Types: major, minor, patch"; \
+	else \
+		python scripts/version_manager.py bump $(MODULE) --type $(TYPE); \
+	fi
+
+# Auto-bump version based on commits
+version-auto:
+	@if [ -z "$(MODULE)" ]; then \
+		echo "Usage: make version-auto MODULE=dataagent-server"; \
+	else \
+		python scripts/version_manager.py auto-bump $(MODULE); \
+	fi
+
+######################
 # CLEANUP
 ######################
 
@@ -205,6 +239,12 @@ help:
 	@echo '  make lint             Run linter'
 	@echo '  make format           Format code'
 	@echo '  make typecheck        Run type checker'
+	@echo ''
+	@echo '-- VERSION MANAGEMENT --'
+	@echo '  make version          Show all module versions'
+	@echo '  make version-analyze MODULE=dataagent-server  Analyze version changes'
+	@echo '  make version-bump MODULE=dataagent-server TYPE=minor  Bump version'
+	@echo '  make version-auto MODULE=dataagent-server  Auto-bump based on commits'
 	@echo ''
 	@echo '-- CLEANUP --'
 	@echo '  make clean            Remove cache files'

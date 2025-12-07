@@ -1,0 +1,4 @@
+# file: /Users/dszhao/source/dataagent/source/dataagent-core/dataagent_core/user/profile.py
+# hypothesis_version: 6.148.7
+
+['created_at', 'custom_fields', 'department', 'display_name', 'email', 'role', 'updated_at', 'user_id', 'username']

@@ -1,0 +1,4 @@
+# file: /Users/dszhao/source/dataagent/source/dataagent-core/dataagent_core/session/models.py
+# hypothesis_version: 6.148.7
+
+['CASCADE', 'MessageModel', 'SessionModel', 'all, delete-orphan', 'assistant', 'created_at', 'idx_created_at', 'idx_last_active', 'idx_session_id', 'last_active', 'message_role', 'messages', 'metadata', 'session', 'session_id', 'sessions', 'sessions.session_id', 'system', 'user']

@@ -323,10 +323,33 @@ def _create_task_tool(
 
     def _validate_and_prepare_state(subagent_type: str, description: str, runtime: ToolRuntime) -> tuple[Runnable, dict]:
         """Prepare state for invocation."""
+        import os
+        
         subagent = subagent_graphs[subagent_type]
         # Create a new state dict to avoid mutating the original
         subagent_state = {k: v for k, v in runtime.state.items() if k not in _EXCLUDED_STATE_KEYS}
-        subagent_state["messages"] = [HumanMessage(content=description)]
+        
+        # Ensure working_directory is passed to subagent
+        if "working_directory" not in subagent_state:
+            subagent_state["working_directory"] = os.getcwd()
+        
+        working_dir = subagent_state.get("working_directory", os.getcwd())
+        
+        # Enhance task description with working directory context
+        enhanced_description = f"""## Working Directory Context
+Current working directory: {working_dir}
+
+**IMPORTANT - File Operation Rules:**
+1. All file operations MUST be relative to the working directory above
+2. Use relative paths (e.g., "src/main.py") or absolute paths starting with {working_dir}
+3. Do NOT use ls("/") or search from root directory "/"
+4. Start all file exploration from the working directory
+5. When using glob or grep, the default search path is the working directory
+
+## Task Instructions:
+{description}"""
+        
+        subagent_state["messages"] = [HumanMessage(content=enhanced_description)]
         return subagent, subagent_state
 
     # Use custom description if provided, otherwise use default template

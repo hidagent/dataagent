@@ -1,0 +1,4 @@
+# file: /Users/dszhao/source/dataagent/source/dataagent-core/dataagent_core/mcp/sqlite_store.py
+# hypothesis_version: 6.148.7
+
+['.dataagent', 'args', 'auto_approve', 'command', 'dataagent.db', 'disabled', 'env', 'headers', 'headers TEXT', 'server_name', 'sse', 'transport', 'url', 'url TEXT', 'user_id']

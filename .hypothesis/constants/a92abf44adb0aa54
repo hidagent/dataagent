@@ -1,0 +1,4 @@
+# file: /Users/dszhao/source/dataagent/source/dataagent-core/dataagent_core/user/context.py
+# hypothesis_version: 6.148.7
+
+['\n其他信息:\n', 'custom_fields', 'department', 'display_name', 'is_anonymous', 'role', 'unknown', 'user_id', 'username', '未知']

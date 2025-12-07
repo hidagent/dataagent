@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import os
 import sys
 import termios
 import tty
@@ -261,7 +262,11 @@ async def execute_task(
         pending_text = ""
 
     # Stream input - may need to loop if there are interrupts
-    stream_input = {"messages": [{"role": "user", "content": final_input}]}
+    # Include working_directory in initial state for subagent file operations
+    stream_input = {
+        "messages": [{"role": "user", "content": final_input}],
+        "working_directory": os.getcwd(),
+    }
 
     try:
         while True:

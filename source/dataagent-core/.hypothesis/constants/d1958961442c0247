@@ -1,0 +1,4 @@
+# file: /Users/dszhao/source/dataagent/source/dataagent-core/dataagent_core/middleware/rules.py
+# hypothesis_version: 6.148.7
+
+[100000, '\n### Conflicts:', '\n### Skipped Rules:', '\n---', '### Triggered Rules:', '---\n', '@(\\w[\\w\\-]*)', 'RulesState', '`([^`]+\\.\\w+)`', 'assistant_id', 'content', 'file:([^\\s]+)', 'path:([^\\s]+)', 'session_id']

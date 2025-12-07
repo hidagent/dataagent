@@ -5,14 +5,8 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich import box
 
-COLORS = {
-    "primary": "#10b981",
-    "dim": "#6b7280",
-    "user": "#ffffff",
-    "agent": "#10b981",
-    "thinking": "#34d399",
-    "tool": "#fbbf24",
-}
+# Import colors from central location
+from dataagent_cli.colors import COLORS
 
 BANNER = """
  ██████╗   █████╗  ████████╗  █████╗
