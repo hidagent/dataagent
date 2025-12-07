@@ -386,19 +386,6 @@ def create_prompt_session(session_state: SessionState) -> FoldingPromptSession:
             # Fallback: just insert normally
             pass
 
-    def on_text_insert(buffer: Buffer, text: str) -> str:
-        """Handle text insertion, folding multiline pastes.
-        
-        This is called for bracketed paste (terminal paste) which is the
-        most common way to paste in terminals.
-        """
-        lines = text.split("\n")
-        if len(lines) > PASTE_FOLD_THRESHOLD:
-            # This looks like a paste operation, fold it
-            paste_id, placeholder = paste_manager.add_paste(text)
-            return placeholder
-        return text
-
     toolbar_style = Style.from_dict(
         {
             "bottom-toolbar": "noreverse",
@@ -414,13 +401,6 @@ def create_prompt_session(session_state: SessionState) -> FoldingPromptSession:
     # Use "prompt" color which works on both light and dark backgrounds
     prompt_color = COLORS.get("prompt", COLORS["primary"])
 
-    # Create buffer with custom on_text_insert handler
-    from prompt_toolkit.filters import Always
-    buffer = Buffer(
-        on_text_insert=on_text_insert,
-        multiline=Always(),
-    )
-
     session = PromptSession(
         message=HTML(f'<style fg="{prompt_color}" bold="true">❯</style> '),
         multiline=True,
@@ -435,10 +415,31 @@ def create_prompt_session(session_state: SessionState) -> FoldingPromptSession:
         style=toolbar_style,
         reserve_space_for_menu=7,
         enable_system_prompt=False,
+        enable_suspend=False,
     )
 
-    # Replace the default buffer with our custom one
-    session.default_buffer = buffer
+    # Enable bracketed paste mode for proper paste detection
+    # This is usually enabled by default, but we ensure it here
+
+    # Monkey-patch the buffer's insert_text to intercept multiline pastes
+    original_insert_text = session.default_buffer.insert_text
+
+    def patched_insert_text(
+        data: str,
+        overwrite: bool = False,
+        move_cursor: bool = True,
+        fire_event: bool = True,
+    ) -> None:
+        """Intercept text insertion to fold multiline pastes."""
+        lines = data.split("\n")
+        if len(lines) > PASTE_FOLD_THRESHOLD:
+            # This looks like a paste operation, fold it
+            paste_id, placeholder = paste_manager.add_paste(data)
+            original_insert_text(placeholder, overwrite, move_cursor, fire_event)
+        else:
+            original_insert_text(data, overwrite, move_cursor, fire_event)
+
+    session.default_buffer.insert_text = patched_insert_text
 
     session_ref["session"] = session
 
