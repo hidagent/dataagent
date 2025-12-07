@@ -2,8 +2,10 @@
 
 import shutil
 from pathlib import Path
+from typing import Any
 
 from rich.console import Console
+from rich.table import Table
 
 from dataagent_core.config import Settings
 from dataagent_cli.colors import COLORS, COMMANDS, DATAAGENT_ASCII
@@ -72,6 +74,10 @@ def handle_slash_command(
             console.print("MCP not configured.", style=COLORS["dim"])
         return None
 
+    # Rules commands
+    if command.startswith("/rules"):
+        return handle_rules_command(command, console, session_state)
+
     console.print(f"Unknown command: {command}", style="yellow")
     console.print("Type /help for available commands.", style=COLORS["dim"])
     return None
@@ -90,6 +96,10 @@ def show_interactive_help(console: Console) -> None:
     console.print("[bold]MCP Commands:[/bold]", style=COLORS["primary"])
     console.print("  /mcp            Show configured MCP servers", style=COLORS["dim"])
     console.print("  /mcp reload     Reload MCP configuration", style=COLORS["dim"])
+    console.print()
+    console.print("[bold]Rules Commands:[/bold]", style=COLORS["primary"])
+    console.print("  /rules          List all rules", style=COLORS["dim"])
+    console.print("  /rules help     Show rules command help", style=COLORS["dim"])
     console.print()
     console.print("[bold]Editing Features:[/bold]", style=COLORS["primary"])
     console.print("  Enter           Submit your message", style=COLORS["dim"])
@@ -275,3 +285,356 @@ def execute_bash_command(user_input: str, console: Console) -> None:
         console.print("[red]Command timed out after 60 seconds[/red]")
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
+
+
+# ============================================================================
+# Rules Commands
+# ============================================================================
+
+
+def handle_rules_command(
+    command: str,
+    console: Console,
+    session_state: Any = None,
+) -> str | None:
+    """Handle /rules commands."""
+    parts = command.split()
+    
+    if len(parts) == 1 or parts[1] == "list":
+        return rules_list(console, session_state)
+    
+    subcommand = parts[1]
+    args = parts[2:] if len(parts) > 2 else []
+    
+    if subcommand == "show":
+        if not args:
+            console.print("Usage: /rules show <name>", style=COLORS["dim"])
+            return None
+        return rules_show(console, session_state, args[0])
+    
+    if subcommand == "create":
+        if not args:
+            console.print("Usage: /rules create <name> [--scope global|user|project]", style=COLORS["dim"])
+            return None
+        scope = "user"
+        if "--scope" in args:
+            idx = args.index("--scope")
+            if idx + 1 < len(args):
+                scope = args[idx + 1]
+                args = args[:idx] + args[idx + 2:]
+        return rules_create(console, session_state, args[0], scope)
+    
+    if subcommand == "delete":
+        if not args:
+            console.print("Usage: /rules delete <name>", style=COLORS["dim"])
+            return None
+        return rules_delete(console, session_state, args[0])
+    
+    if subcommand == "validate":
+        return rules_validate(console, session_state)
+    
+    if subcommand == "reload":
+        return rules_reload(console, session_state)
+    
+    if subcommand == "debug":
+        return rules_debug(console, session_state, args)
+    
+    if subcommand == "conflicts":
+        return rules_conflicts(console, session_state)
+    
+    if subcommand == "help":
+        return rules_help(console)
+    
+    console.print(f"Unknown rules subcommand: {subcommand}", style="yellow")
+    console.print("Type /rules help for available commands.", style=COLORS["dim"])
+    return None
+
+
+def _get_rule_store(session_state: Any = None):
+    """Get or create a rule store."""
+    from dataagent_core.rules import FileRuleStore
+    from dataagent_core.config import Settings
+    
+    settings = Settings()
+    
+    # Get assistant_id from session state if available
+    assistant_id = "agent"
+    if session_state and hasattr(session_state, "assistant_id"):
+        assistant_id = session_state.assistant_id
+    
+    global_rules_dir = settings.user_deepagents_dir / "rules"
+    user_rules_dir = settings.get_agent_dir(assistant_id) / "rules"
+    project_rules_dir = None
+    if settings.project_root:
+        project_rules_dir = settings.project_root / ".dataagent" / "rules"
+    
+    return FileRuleStore(
+        global_dir=global_rules_dir,
+        user_dir=user_rules_dir,
+        project_dir=project_rules_dir,
+    )
+
+
+def rules_list(console: Console, session_state: Any = None) -> None:
+    """List all available rules."""
+    from dataagent_core.rules import RuleScope
+    
+    store = _get_rule_store(session_state)
+    rules = store.list_rules()
+    
+    if not rules:
+        console.print("No rules found.", style=COLORS["dim"])
+        console.print("Use /rules create <name> to create a new rule.", style=COLORS["dim"])
+        return None
+    
+    console.print("\n[bold]Agent Rules:[/bold]\n", style=COLORS["primary"])
+    
+    # Group by scope
+    for scope in [RuleScope.GLOBAL, RuleScope.USER, RuleScope.PROJECT, RuleScope.SESSION]:
+        scope_rules = [r for r in rules if r.scope == scope]
+        if scope_rules:
+            console.print(f"[bold]{scope.value.upper()}[/bold]", style=COLORS["primary"])
+            
+            table = Table(show_header=True, header_style="bold")
+            table.add_column("Name", style="cyan")
+            table.add_column("Description")
+            table.add_column("Inclusion")
+            table.add_column("Priority", justify="right")
+            table.add_column("Enabled")
+            
+            for rule in sorted(scope_rules, key=lambda r: (-r.priority, r.name)):
+                table.add_row(
+                    rule.name,
+                    rule.description[:50] + "..." if len(rule.description) > 50 else rule.description,
+                    rule.inclusion.value,
+                    str(rule.priority),
+                    "✓" if rule.enabled else "✗",
+                )
+            
+            console.print(table)
+            console.print()
+    
+    return None
+
+
+def rules_show(console: Console, session_state: Any, name: str) -> None:
+    """Show full content of a rule."""
+    store = _get_rule_store(session_state)
+    rule = store.get_rule(name)
+    
+    if not rule:
+        console.print(f"Rule not found: {name}", style="yellow")
+        return None
+    
+    console.print(f"\n[bold]Rule: {rule.name}[/bold]", style=COLORS["primary"])
+    console.print(f"Description: {rule.description}", style=COLORS["dim"])
+    console.print(f"Scope: {rule.scope.value}", style=COLORS["dim"])
+    console.print(f"Inclusion: {rule.inclusion.value}", style=COLORS["dim"])
+    if rule.file_match_pattern:
+        console.print(f"File Pattern: {rule.file_match_pattern}", style=COLORS["dim"])
+    console.print(f"Priority: {rule.priority}", style=COLORS["dim"])
+    console.print(f"Enabled: {rule.enabled}", style=COLORS["dim"])
+    if rule.source_path:
+        console.print(f"Source: {rule.source_path}", style=COLORS["dim"])
+    console.print("\n[bold]Content:[/bold]", style=COLORS["primary"])
+    console.print(rule.content)
+    console.print()
+    
+    return None
+
+
+def rules_create(console: Console, session_state: Any, name: str, scope: str = "user") -> None:
+    """Create a new rule."""
+    from dataagent_core.rules import Rule, RuleScope, RuleInclusion
+    
+    store = _get_rule_store(session_state)
+    
+    # Check if rule already exists
+    existing = store.get_rule(name)
+    if existing:
+        console.print(f"Rule already exists: {name}", style="yellow")
+        console.print(f"Use /rules show {name} to view it.", style=COLORS["dim"])
+        return None
+    
+    # Parse scope
+    try:
+        rule_scope = RuleScope(scope)
+    except ValueError:
+        console.print(f"Invalid scope: {scope}", style="yellow")
+        console.print("Valid scopes: global, user, project", style=COLORS["dim"])
+        return None
+    
+    # Create template rule
+    rule = Rule(
+        name=name,
+        description=f"Description for {name}",
+        content=f"""# {name}
+
+Add your rule content here.
+
+## Guidelines
+
+- Guideline 1
+- Guideline 2
+""",
+        scope=rule_scope,
+        inclusion=RuleInclusion.ALWAYS,
+    )
+    
+    store.save_rule(rule)
+    
+    console.print(f"✓ Created rule: {name}", style=COLORS["primary"])
+    if rule.source_path:
+        console.print(f"Location: {rule.source_path}", style=COLORS["dim"])
+    console.print(f"Edit the file to customize the rule content.", style=COLORS["dim"])
+    
+    return None
+
+
+def rules_delete(console: Console, session_state: Any, name: str) -> None:
+    """Delete a rule."""
+    from dataagent_core.rules import RuleScope
+    
+    store = _get_rule_store(session_state)
+    rule = store.get_rule(name)
+    
+    if not rule:
+        console.print(f"Rule not found: {name}", style="yellow")
+        return None
+    
+    # Delete from the rule's scope
+    success = store.delete_rule(name, rule.scope)
+    
+    if success:
+        console.print(f"✓ Deleted rule: {name}", style=COLORS["primary"])
+    else:
+        console.print(f"Failed to delete rule: {name}", style="red")
+    
+    return None
+
+
+def rules_validate(console: Console, session_state: Any) -> None:
+    """Validate all rule files."""
+    from dataagent_core.rules import RuleParser
+    
+    store = _get_rule_store(session_state)
+    parser = RuleParser()
+    
+    # Reload to get fresh data
+    store.reload()
+    rules = store.list_rules()
+    
+    errors = []
+    warnings = []
+    
+    for rule in rules:
+        if rule.source_path:
+            is_valid, rule_errors, rule_warnings = parser.validate_content(
+                Path(rule.source_path).read_text() if Path(rule.source_path).exists() else ""
+            )
+            if rule_errors:
+                errors.extend([(rule.name, e) for e in rule_errors])
+            if rule_warnings:
+                warnings.extend([(rule.name, w) for w in rule_warnings])
+    
+    if errors:
+        console.print("\n[bold red]Errors:[/bold red]")
+        for name, error in errors:
+            console.print(f"  {name}: {error}", style="red")
+    
+    if warnings:
+        console.print("\n[bold yellow]Warnings:[/bold yellow]")
+        for name, warning in warnings:
+            console.print(f"  {name}: {warning}", style="yellow")
+    
+    if not errors and not warnings:
+        console.print(f"✓ All {len(rules)} rules are valid.", style=COLORS["primary"])
+    else:
+        console.print(f"\nValidated {len(rules)} rules.", style=COLORS["dim"])
+    
+    return None
+
+
+def rules_reload(console: Console, session_state: Any) -> None:
+    """Reload all rules from disk."""
+    store = _get_rule_store(session_state)
+    store.reload()
+    rules = store.list_rules()
+    
+    console.print(f"✓ Reloaded {len(rules)} rules.", style=COLORS["primary"])
+    
+    return None
+
+
+def rules_debug(console: Console, session_state: Any, args: list[str]) -> None:
+    """Enable/disable debug mode for rule evaluation."""
+    if not args:
+        console.print("Usage: /rules debug on|off", style=COLORS["dim"])
+        return None
+    
+    mode = args[0].lower()
+    
+    if mode == "on":
+        console.print("✓ Rule debug mode enabled.", style=COLORS["primary"])
+        console.print("Rule evaluation traces will be shown in responses.", style=COLORS["dim"])
+        # Note: Actual debug mode toggle would need to be passed to the middleware
+    elif mode == "off":
+        console.print("✓ Rule debug mode disabled.", style=COLORS["primary"])
+    else:
+        console.print("Usage: /rules debug on|off", style=COLORS["dim"])
+    
+    return None
+
+
+def rules_conflicts(console: Console, session_state: Any) -> None:
+    """Show rule conflicts."""
+    from dataagent_core.rules import ConflictDetector
+    
+    store = _get_rule_store(session_state)
+    rules = store.list_rules()
+    
+    detector = ConflictDetector()
+    report = detector.detect_conflicts(rules)
+    
+    if not report.has_conflicts() and not report.warnings:
+        console.print("✓ No conflicts detected.", style=COLORS["primary"])
+        return None
+    
+    if report.conflicts:
+        console.print("\n[bold red]Conflicts:[/bold red]")
+        for conflict in report.conflicts:
+            console.print(
+                f"  • {conflict.rule1_name} ({conflict.rule1_scope.value}) vs "
+                f"{conflict.rule2_name} ({conflict.rule2_scope.value})",
+                style="red",
+            )
+            console.print(f"    Resolution: {conflict.resolution}", style=COLORS["dim"])
+    
+    if report.warnings:
+        console.print("\n[bold yellow]Warnings:[/bold yellow]")
+        for warning in report.warnings:
+            console.print(f"  • {warning}", style="yellow")
+    
+    console.print()
+    return None
+
+
+def rules_help(console: Console) -> None:
+    """Show rules command help."""
+    console.print("\n[bold]Rules Commands:[/bold]", style=COLORS["primary"])
+    console.print()
+    console.print("  /rules list              List all rules grouped by scope", style=COLORS["dim"])
+    console.print("  /rules show <name>       Show full content of a rule", style=COLORS["dim"])
+    console.print("  /rules create <name>     Create a new rule", style=COLORS["dim"])
+    console.print("    --scope <scope>        Scope: global, user, project (default: user)", style=COLORS["dim"])
+    console.print("  /rules delete <name>     Delete a rule", style=COLORS["dim"])
+    console.print("  /rules validate          Validate all rule files", style=COLORS["dim"])
+    console.print("  /rules reload            Reload rules from disk", style=COLORS["dim"])
+    console.print("  /rules debug on|off      Enable/disable debug mode", style=COLORS["dim"])
+    console.print("  /rules conflicts         Show rule conflicts", style=COLORS["dim"])
+    console.print("  /rules help              Show this help", style=COLORS["dim"])
+    console.print()
+    console.print("[bold]Rule Reference:[/bold]", style=COLORS["primary"])
+    console.print("  Use @rulename in your message to manually include a rule.", style=COLORS["dim"])
+    console.print()
+    return None

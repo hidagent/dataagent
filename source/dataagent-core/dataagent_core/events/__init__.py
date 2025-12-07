@@ -230,8 +230,34 @@ def from_dict(data: dict) -> ExecutionEvent:
             cancelled=data.get("cancelled", False),
             timestamp=timestamp,
         )
+    elif event_type == "rules_applied":
+        return RulesAppliedEvent(
+            triggered_rules=data.get("triggered_rules", []),
+            skipped_count=data.get("skipped_count", 0),
+            conflicts=data.get("conflicts", []),
+            total_size=data.get("total_size", 0),
+            timestamp=timestamp,
+        )
+    elif event_type == "rule_debug":
+        return RuleDebugEvent(
+            request_id=data.get("request_id", ""),
+            evaluated_rules=data.get("evaluated_rules", []),
+            matched_rules=data.get("matched_rules", []),
+            skipped_rules=data.get("skipped_rules", []),
+            conflicts=data.get("conflicts", []),
+            final_rules=data.get("final_rules", []),
+            total_content_size=data.get("total_content_size", 0),
+            timestamp=timestamp,
+        )
     
     raise ValueError(f"Unhandled event type: {event_type}")
+
+
+from dataagent_core.events.rules import RulesAppliedEvent, RuleDebugEvent
+
+# Register rule events
+_register_event_type(RulesAppliedEvent)
+_register_event_type(RuleDebugEvent)
 
 
 __all__ = [
@@ -244,5 +270,7 @@ __all__ = [
     "FileOperationEvent",
     "ErrorEvent",
     "DoneEvent",
+    "RulesAppliedEvent",
+    "RuleDebugEvent",
     "from_dict",
 ]

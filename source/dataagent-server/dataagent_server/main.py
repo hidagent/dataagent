@@ -15,7 +15,7 @@ from dataagent_server.api.deps import (
     set_session_manager,
     set_mcp_store,
 )
-from dataagent_server.api.v1 import chat, health, sessions, mcp, users, user_profiles
+from dataagent_server.api.v1 import chat, health, sessions, mcp, users, user_profiles, rules
 from dataagent_server.config import get_settings
 from dataagent_server.ws import ConnectionManager, WebSocketChatHandler
 from dataagent_core.session import SessionStoreFactory, MessageStoreFactory
@@ -173,6 +173,7 @@ def create_app() -> FastAPI:
     app.include_router(mcp.router, prefix="/api/v1")
     app.include_router(users.router, prefix="/api/v1")
     app.include_router(user_profiles.router, prefix="/api/v1")
+    app.include_router(rules.router, prefix="/api/v1")
     
     # WebSocket endpoint
     @app.websocket("/ws/chat/{session_id}")
