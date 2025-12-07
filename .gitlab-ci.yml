@@ -1,0 +1,200 @@
+# GitLab CI/CD Pipeline for DataAgent
+# 
+# 功能:
+# 1. 代码质量检查 (lint, type check)
+# 2. 单元测试
+# 3. 自动版本分析和更新
+# 4. 自动发布 (可选)
+
+stages:
+  - lint
+  - test
+  - version
+  - release
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  PYTHON_VERSION: "3.12"
+
+# 缓存 pip 依赖
+cache:
+  paths:
+    - .cache/pip/
+    - .venv/
+
+# 基础 Python 镜像
+.python-base:
+  image: python:${PYTHON_VERSION}
+  before_script:
+    - python -m pip install --upgrade pip
+    - pip install -e source/dataagent-core
+    - pip install -e source/dataagent-cli
+    - pip install -e source/dataagent-server
+    - pip install pytest ruff mypy
+
+# ==================== Lint Stage ====================
+
+lint:
+  extends: .python-base
+  stage: lint
+  script:
+    - ruff check source/
+    - ruff format --check source/
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# Commit message 格式检查
+commit-lint:
+  stage: lint
+  image: python:${PYTHON_VERSION}
+  script:
+    - |
+      # 检查最近的 commit message 是否符合 Conventional Commits 规范
+      COMMIT_MSG=$(git log -1 --pretty=%B)
+      echo "Checking commit message: $COMMIT_MSG"
+      
+      # 正则匹配 Conventional Commits 格式
+      if echo "$COMMIT_MSG" | grep -qE "^(feat|fix|docs|style|refactor|perf|test|chore|ci|build)(\(.+\))?!?:"; then
+        echo "✓ Commit message follows Conventional Commits format"
+      else
+        echo "⚠ Warning: Commit message does not follow Conventional Commits format"
+        echo ""
+        echo "Expected format: <type>(<scope>): <description>"
+        echo "Types: feat, fix, docs, style, refactor, perf, test, chore, ci, build"
+        echo ""
+        echo "Examples:"
+        echo "  feat(server): add user authentication"
+        echo "  fix(cli): resolve input parsing issue"
+        echo "  docs: update README"
+        # 不阻止 pipeline，只是警告
+      fi
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# ==================== Test Stage ====================
+
+test-core:
+  extends: .python-base
+  stage: test
+  script:
+    - pytest source/dataagent-core/tests -v --tb=short
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - changes:
+        - source/dataagent-core/**/*
+
+test-server:
+  extends: .python-base
+  stage: test
+  script:
+    - pytest source/dataagent-server/tests -v --tb=short
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - changes:
+        - source/dataagent-server/**/*
+
+test-cli:
+  extends: .python-base
+  stage: test
+  script:
+    - pytest source/dataagent-cli/tests -v --tb=short
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - changes:
+        - source/dataagent-cli/**/*
+
+# 多租户隔离测试
+test-isolation:
+  extends: .python-base
+  stage: test
+  script:
+    - pytest source/dataagent-server/tests/test_multi_tenant -v --tb=short
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# ==================== Version Stage ====================
+
+# 分析版本变更 (MR 时显示建议)
+version-analyze:
+  stage: version
+  image: python:${PYTHON_VERSION}
+  script:
+    - |
+      echo "📦 Analyzing version changes..."
+      
+      # 检查各模块是否有变更
+      for module in dataagent-core dataagent-cli dataagent-server dataagent-harbor; do
+        MODULE_PATH="source/${module}"
+        
+        # 检查是否有变更
+        if git diff --name-only origin/$CI_MERGE_REQUEST_TARGET_BRANCH...HEAD | grep -q "^${MODULE_PATH}/"; then
+          echo ""
+          echo "🔍 Changes detected in ${module}:"
+          python scripts/version_manager.py analyze ${module} || true
+        fi
+      done
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  allow_failure: true
+
+# 自动更新版本 (合并到主分支后)
+version-bump:
+  stage: version
+  image: python:${PYTHON_VERSION}
+  script:
+    - |
+      echo "📦 Auto-bumping versions based on commits..."
+      
+      # 配置 git
+      git config user.email "ci@dataagent.local"
+      git config user.name "DataAgent CI"
+      
+      CHANGED=false
+      
+      # 检查各模块
+      for module in dataagent-core dataagent-cli dataagent-server dataagent-harbor; do
+        MODULE_PATH="source/${module}"
+        
+        # 检查最近的 commit 是否涉及该模块
+        if git diff --name-only HEAD~1 HEAD | grep -q "^${MODULE_PATH}/"; then
+          echo ""
+          echo "🔄 Processing ${module}..."
+          python scripts/version_manager.py auto-bump ${module} && CHANGED=true || true
+        fi
+      done
+      
+      # 如果有版本变更，提交
+      if [ "$CHANGED" = true ]; then
+        git add source/*/pyproject.toml
+        git commit -m "chore: auto-bump versions [skip ci]" || echo "No changes to commit"
+        git push origin HEAD:$CI_COMMIT_BRANCH || echo "Push failed or no changes"
+      fi
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+  allow_failure: true
+
+# ==================== Release Stage ====================
+
+# 创建 Release (手动触发)
+release:
+  stage: release
+  image: python:${PYTHON_VERSION}
+  script:
+    - |
+      echo "📦 Creating release..."
+      python scripts/version_manager.py show-all
+      
+      # 这里可以添加:
+      # - 构建 wheel 包
+      # - 上传到 PyPI 或私有仓库
+      # - 创建 GitLab Release
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+  allow_failure: true
