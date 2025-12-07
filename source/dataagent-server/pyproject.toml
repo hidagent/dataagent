@@ -1,6 +1,6 @@
 [project]
 name = "dataagent-server"
-version = "0.1.0"
+version = "0.1.1"
 description = "DataAgent Web Server - FastAPI-based REST API and WebSocket service"
 readme = "README.md"
 requires-python = ">=3.11"
