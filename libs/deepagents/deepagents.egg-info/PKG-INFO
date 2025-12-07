@@ -1,0 +1,17 @@
+Metadata-Version: 2.4
+Name: deepagents
+Version: 0.3.0
+Summary: General purpose 'deep agent' with sub-agent spawning, todo list capabilities, and mock file system. Built on LangGraph.
+License: MIT
+Project-URL: Homepage, https://docs.langchain.com/oss/python/deepagents/overview
+Project-URL: Documentation, https://reference.langchain.com/python/deepagents/
+Project-URL: Source, https://github.com/langchain-ai/deepagents
+Project-URL: Twitter, https://x.com/LangChainAI
+Project-URL: Slack, https://www.langchain.com/join-community
+Project-URL: Reddit, https://www.reddit.com/r/LangChain/
+Requires-Python: <4.0,>=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: langchain-anthropic<2.0.0,>=1.2.0
+Requires-Dist: langchain<2.0.0,>=1.1.0
+Requires-Dist: langchain-core<2.0.0,>=1.1.0
+Requires-Dist: wcmatch

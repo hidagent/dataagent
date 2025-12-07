@@ -173,9 +173,17 @@ async def main_loop(
 
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
+    from dataagent_cli import __version__
+
     parser = argparse.ArgumentParser(
         description="DataAgent CLI - AI-powered data assistant",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    parser.add_argument(
+        "-v", "--version",
+        action="version",
+        version=f"dataagent-cli {__version__}",
     )
 
     parser.add_argument(
