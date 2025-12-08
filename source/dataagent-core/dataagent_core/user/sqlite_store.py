@@ -8,9 +8,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from typing import TYPE_CHECKING
+
 from sqlalchemy import Column, DateTime, Index, String, Text, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncEngine
 
 from dataagent_core.session.models import Base
 from dataagent_core.user.profile import UserProfile
@@ -46,17 +51,29 @@ class SQLiteUserProfileStore(UserProfileStore):
     
     Args:
         db_path: Path to SQLite database file. Defaults to ~/.dataagent/dataagent.db
+        engine: Optional existing SQLAlchemy async engine to share.
     """
     
-    def __init__(self, db_path: str | Path | None = None) -> None:
-        if db_path is None:
-            db_path = Path.home() / ".dataagent" / "dataagent.db"
+    def __init__(
+        self,
+        db_path: str | Path | None = None,
+        engine: "AsyncEngine | None" = None,
+    ) -> None:
+        if engine is not None:
+            self._engine = engine
+            self._owns_engine = False
+            self.db_path = None
+        else:
+            if db_path is None:
+                db_path = Path.home() / ".dataagent" / "dataagent.db"
+            
+            self.db_path = Path(db_path)
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            url = f"sqlite+aiosqlite:///{self.db_path}"
+            self._engine = create_async_engine(url, echo=False)
+            self._owns_engine = True
         
-        self.db_path = Path(db_path)
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        url = f"sqlite+aiosqlite:///{self.db_path}"
-        self._engine = create_async_engine(url, echo=False)
         self._session_factory = sessionmaker(
             self._engine,
             class_=AsyncSession,
@@ -70,9 +87,10 @@ class SQLiteUserProfileStore(UserProfileStore):
         logger.info(f"User profiles table initialized: {self.db_path}")
     
     async def close(self) -> None:
-        """Close the database engine."""
-        await self._engine.dispose()
-        logger.info("SQLite user profile store closed")
+        """Close the database engine if owned."""
+        if self._owns_engine:
+            await self._engine.dispose()
+            logger.info("SQLite user profile store closed")
     
     def _model_to_profile(self, model: UserProfileModel) -> UserProfile:
         """Convert SQLAlchemy model to UserProfile dataclass."""

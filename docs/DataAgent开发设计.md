@@ -80,7 +80,7 @@ DataAgent 服务三类用户，满足不同场景需求：
 │   │                    外部系统集成                               │ │
 │   │                                                              │ │
 │   │  • 大语言模型 (OpenAI/Claude/Gemini)                        │ │
-│   │  • 数据库系统 (MySQL/Hive/ClickHouse)                       │ │
+│   │  • 数据库系统 (PostgreSQL/Hive/ClickHouse)                       │ │
 │   │  • 企业应用 (数据目录/报表系统/BI工具)                       │ │
 │   └─────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────┘
@@ -121,7 +121,7 @@ DataAgent 服务三类用户，满足不同场景需求：
 - 多轮对话支持
 - 历史记录查询
 - 会话状态持久化
-- 支持 MySQL 存储
+- 支持 PostgreSQL 存储
 
 ## 产品界面
 
@@ -167,14 +167,14 @@ DataAgent 服务三类用户，满足不同场景需求：
 | DataAgent Core | AI 引擎、事件系统、中间件、工具系统 | ✅ 已完成 |
 | DataAgent Server | REST API、WebSocket、认证、会话管理 | ✅ 已完成 |
 | DataAgent CLI | 终端交互、渲染、HITL 审批 | ✅ 已完成 |
-| MySQL 存储 | 会话持久化、消息历史 | ✅ 已完成 |
+| PostgreSQL 存储 | 会话持久化、消息历史 | ✅ 已完成 |
 | Demo 应用 | Streamlit 演示界面 | ✅ 已完成 |
 
 ### 技术栈
 
 - **后端**：Python 3.11+、FastAPI、WebSocket
 - **AI 引擎**：LangChain、LangGraph、DeepAgents
-- **数据库**：MySQL (可选)、内存存储
+- **数据库**：PostgreSQL (可选)、内存存储
 - **前端**：React (ChatUI)、Streamlit (Demo)
 
 ## 部署方式
@@ -197,7 +197,7 @@ http://localhost:8000
 - 支持 Docker 容器化部署
 - 支持 Kubernetes 集群部署
 - 支持多实例负载均衡
-- 支持 MySQL 持久化存储
+- 支持 PostgreSQL 持久化存储
 
 ## 企业级特性（规划中）
 
@@ -213,7 +213,7 @@ http://localhost:8000
 │   DataAgent                                                      │
 │       │                                                          │
 │       ├──▶ MCP Server: 数据库查询                                │
-│       │    └─ 连接 MySQL、PostgreSQL、ClickHouse                 │
+│       │    └─ 连接 PostgreSQL、PostgreSQL、ClickHouse                 │
 │       │                                                          │
 │       ├──▶ MCP Server: 文件系统                                  │
 │       │    └─ 安全的文件读写操作                                  │
@@ -282,7 +282,7 @@ http://localhost:8000
 | 阶段 | 功能 | 状态 |
 |------|------|------|
 | Phase 1 | 核心功能（AI 引擎、Server、CLI） | ✅ 已完成 |
-| Phase 2 | 数据持久化（MySQL 存储） | ✅ 已完成 |
+| Phase 2 | 数据持久化（PostgreSQL 存储） | ✅ 已完成 |
 | Phase 3 | MCP 工具扩展 | 🚧 设计中 |
 | Phase 4 | 多租户与用户隔离 | 🚧 设计中 |
 | Phase 5 | 企业知识库深度集成 | 📋 规划中 |

@@ -15,7 +15,7 @@ from dataagent_server.api.deps import (
     set_session_manager,
     set_mcp_store,
 )
-from dataagent_server.api.v1 import chat, chat_stream, health, sessions, mcp, users, user_profiles, rules, assistants
+from dataagent_server.api.v1 import auth, chat, chat_stream, health, sessions, mcp, users, user_profiles, rules, assistants
 from dataagent_server.config import get_settings
 from dataagent_server.ws import ConnectionManager, WebSocketChatHandler
 from dataagent_core.session import SessionStoreFactory, MessageStoreFactory
@@ -43,25 +43,30 @@ async def lifespan(app: FastAPI):
     """
     settings = get_settings()
     
+    # Initialize server database (s_ tables)
+    from dataagent_server.database import DatabaseFactory
+    await DatabaseFactory.create_tables()
+    logger.info("Server database tables initialized")
+    
     # Initialize session store based on configuration
-    if settings.session_store == "mysql":
-        from dataagent_core.session.stores.mysql import MySQLSessionStore
-        from dataagent_core.session.stores.mysql_message import MySQLMessageStore
-        from dataagent_core.mcp import MySQLMCPConfigStore
-        from dataagent_core.user import MemoryUserProfileStore  # TODO: Add MySQLUserProfileStore
+    if settings.session_store == "postgres":
+        from dataagent_core.session.stores.postgres import PostgresSessionStore
+        from dataagent_core.session.stores.postgres_message import PostgresMessageStore
+        from dataagent_core.mcp import PostgresMCPConfigStore
+        from dataagent_core.user import MemoryUserProfileStore  # TODO: Add PostgresUserProfileStore
         
-        session_store = MySQLSessionStore(
-            url=settings.mysql_url,
-            pool_size=settings.mysql_pool_size,
-            max_overflow=settings.mysql_max_overflow,
+        session_store = PostgresSessionStore(
+            url=settings.postgres_url,
+            pool_size=settings.postgres_pool_size,
+            max_overflow=settings.postgres_max_overflow,
         )
         await session_store.init_tables()
-        message_store = MySQLMessageStore(engine=session_store._engine)
-        mcp_store = MySQLMCPConfigStore(engine=session_store._engine)
+        message_store = PostgresMessageStore(engine=session_store._engine)
+        mcp_store = PostgresMCPConfigStore(engine=session_store._engine)
         await mcp_store.init_tables()
-        user_profile_store = MemoryUserProfileStore()  # TODO: Use MySQL store
+        user_profile_store = MemoryUserProfileStore()  # TODO: Use Postgres store
         
-        logger.info(f"Using MySQL store: {settings.mysql_host}:{settings.mysql_port}/{settings.mysql_database}")
+        logger.info(f"Using PostgreSQL store: {settings.postgres_host}:{settings.postgres_port}/{settings.postgres_database}")
         
     elif settings.session_store == "sqlite":
         from dataagent_core.session.stores.sqlite import SQLiteSessionStore
@@ -101,9 +106,38 @@ async def lifespan(app: FastAPI):
     
     # Initialize core settings and agent factory
     core_settings = CoreSettings.from_environment()
-    agent_factory = AgentFactory(settings=core_settings)
+    
+    # Create checkpointer for LangGraph state persistence
+    # This stores agent execution state (messages, tool calls, etc.)
+    # Supported: sqlite, postgres
+    checkpointer_cm = None
+    checkpointer = None
+    
+    if settings.session_store == "sqlite":
+        from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+        checkpointer_cm = AsyncSqliteSaver.from_conn_string(settings.sqlite_path)
+        checkpointer = await checkpointer_cm.__aenter__()
+        logger.info(f"Using SQLite checkpointer: {settings.sqlite_path}")
+    
+    elif settings.session_store == "postgres":
+        # PostgreSQL checkpointer for production
+        try:
+            from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+            checkpointer_cm = AsyncPostgresSaver.from_conn_string(settings.postgres_url)
+            checkpointer = await checkpointer_cm.__aenter__()
+            # Setup tables if needed
+            await checkpointer.setup()
+            logger.info(f"Using PostgreSQL checkpointer: {settings.postgres_host}")
+        except ImportError:
+            logger.warning("langgraph-checkpoint-postgres not installed, using InMemorySaver")
+            from langgraph.checkpoint.memory import InMemorySaver
+            checkpointer = InMemorySaver()
+    
+    agent_factory = AgentFactory(settings=core_settings, checkpointer=checkpointer)
     app.state.agent_factory = agent_factory
     app.state.core_settings = core_settings
+    app.state.checkpointer = checkpointer
+    app.state.checkpointer_cm = checkpointer_cm
     
     # Initialize MCP connection manager
     mcp_connection_manager = MCPConnectionManager(
@@ -120,6 +154,8 @@ async def lifespan(app: FastAPI):
         mcp_store=mcp_store,
         mcp_connection_manager=mcp_connection_manager,
         user_profile_store=user_profile_store,
+        session_store=session_store,
+        message_store=message_store,
     )
     
     logger.info(f"DataAgent Server v{__version__} starting...")
@@ -131,7 +167,10 @@ async def lifespan(app: FastAPI):
     
     # Cleanup
     await mcp_connection_manager.disconnect_all()
-    if settings.session_store in ("mysql", "sqlite"):
+    if checkpointer_cm is not None:
+        await checkpointer_cm.__aexit__(None, None, None)
+        logger.info("SQLite checkpointer closed")
+    if settings.session_store in ("postgres", "sqlite"):
         await session_store.close()
     logger.info("DataAgent Server shutting down...")
 
@@ -167,6 +206,7 @@ def create_app() -> FastAPI:
     setup_exception_handlers(app)
     
     # Include API routers
+    app.include_router(auth.router, prefix="/api/v1")
     app.include_router(health.router, prefix="/api/v1")
     app.include_router(chat.router, prefix="/api/v1")
     app.include_router(chat_stream.router, prefix="/api/v1")

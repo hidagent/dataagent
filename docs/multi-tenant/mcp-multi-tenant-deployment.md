@@ -20,7 +20,7 @@
               │      │
         ┌─────▼──────▼─────┐
         │  Shared Database │
-        │  (MySQL/SQLite)  │
+        │  (PostgreSQL/SQLite)  │
         └──────────────────┘
 ```
 
@@ -122,20 +122,20 @@ ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 version: '3.8'
 
 services:
-  # MySQL 数据库
-  mysql:
-    image: mysql:8.0
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:8.0
     environment:
-      MYSQL_ROOT_PASSWORD: root_password
-      MYSQL_DATABASE: dataagent
+      POSTGRES_PASSWORD: root_password
+      POSTGRES_DB: dataagent
       MYSQL_USER: dataagent
       MYSQL_PASSWORD: dataagent_password
     ports:
-      - "3306:3306"
+      - "5432:5432"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - postgres_data:/var/lib/postgres
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD", "postgresadmin", "ping", "-h", "localhost"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -145,7 +145,7 @@ services:
     build: .
     environment:
       USER_ID: alice
-      DATABASE_URL: mysql+aiomysql://dataagent:dataagent_password@mysql:3306/dataagent
+      DATABASE_URL: postgres+aiopostgres://dataagent:dataagent_password@postgres:5432/dataagent
       MCP_MAX_CONNECTIONS_PER_USER: 10
       MCP_MAX_TOTAL_CONNECTIONS: 100
       LOG_LEVEL: INFO
@@ -155,7 +155,7 @@ services:
     ports:
       - "8001:8000"
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
     volumes:
       - ./logs/alice:/opt/dataagent/logs
@@ -165,7 +165,7 @@ services:
     build: .
     environment:
       USER_ID: bob
-      DATABASE_URL: mysql+aiomysql://dataagent:dataagent_password@mysql:3306/dataagent
+      DATABASE_URL: postgres+aiopostgres://dataagent:dataagent_password@postgres:5432/dataagent
       MCP_MAX_CONNECTIONS_PER_USER: 10
       MCP_MAX_TOTAL_CONNECTIONS: 100
       LOG_LEVEL: INFO
@@ -175,7 +175,7 @@ services:
     ports:
       - "8002:8000"
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
     volumes:
       - ./logs/bob:/opt/dataagent/logs
@@ -185,7 +185,7 @@ services:
     build: .
     environment:
       USER_ID: charlie
-      DATABASE_URL: mysql+aiomysql://dataagent:dataagent_password@mysql:3306/dataagent
+      DATABASE_URL: postgres+aiopostgres://dataagent:dataagent_password@postgres:5432/dataagent
       MCP_MAX_CONNECTIONS_PER_USER: 10
       MCP_MAX_TOTAL_CONNECTIONS: 100
       LOG_LEVEL: INFO
@@ -196,7 +196,7 @@ services:
     ports:
       - "8003:8000"
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
     volumes:
       - ./logs/charlie:/opt/dataagent/logs
@@ -216,7 +216,7 @@ services:
       - dataagent-charlie
 
 volumes:
-  mysql_data:
+  postgres_data:
 ```
 
 ### 3.2 Nginx 配置
@@ -277,8 +277,8 @@ server {
 
 ```bash
 # .env
-# MySQL 配置
-MYSQL_ROOT_PASSWORD=root_password
+# PostgreSQL 配置
+POSTGRES_PASSWORD=root_password
 MYSQL_USER=dataagent
 MYSQL_PASSWORD=dataagent_password
 
@@ -325,7 +325,7 @@ data:
         "connection_timeout": 30,
         "enable_audit_log": True,
     }
-    DATABASE_URL = "mysql+aiomysql://dataagent:password@mysql:3306/dataagent"
+    DATABASE_URL = "postgres+aiopostgres://dataagent:password@postgres:5432/dataagent"
     LOG_LEVEL = "INFO"
 ```
 
@@ -379,7 +379,7 @@ spec:
         - name: USER_ID
           value: "alice"
         - name: DATABASE_URL
-          value: "mysql+aiomysql://dataagent:password@mysql:3306/dataagent"
+          value: "postgres+aiopostgres://dataagent:password@postgres:5432/dataagent"
         - name: ALICE_GITHUB_TOKEN
           valueFrom:
             secretKeyRef:

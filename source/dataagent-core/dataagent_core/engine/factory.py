@@ -197,8 +197,16 @@ The todo list is a planning tool - use it judiciously to avoid overwhelming the 
 class AgentFactory:
     """Factory for creating configured agents."""
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, checkpointer: Any | None = None):
+        """Initialize agent factory.
+        
+        Args:
+            settings: Core settings.
+            checkpointer: Optional checkpointer for persisting agent state.
+                         If None, uses InMemorySaver (no persistence).
+        """
         self.settings = settings
+        self.checkpointer = checkpointer
 
     def create_agent(
         self,
@@ -317,7 +325,7 @@ class AgentFactory:
         # Interrupt config
         interrupt_on = {} if config.auto_approve else _build_interrupt_config()
 
-        # Create agent
+        # Create agent with checkpointer (use factory's checkpointer or default to InMemorySaver)
         agent = create_deep_agent(
             model=model,
             system_prompt=system_prompt,
@@ -325,7 +333,7 @@ class AgentFactory:
             backend=backend,
             middleware=middleware,
             interrupt_on=interrupt_on,
-            checkpointer=InMemorySaver(),
+            checkpointer=self.checkpointer or InMemorySaver(),
         ).with_config({"recursion_limit": config.recursion_limit})
 
         return agent, backend

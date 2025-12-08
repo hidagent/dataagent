@@ -62,7 +62,7 @@ class MessageStore(ABC):
     
     Implementations can provide different storage backends:
     - MemoryMessageStore: In-memory storage (for development/testing)
-    - MySQLMessageStore: MySQL database storage (for production)
+    - PostgresMessageStore: PostgreSQL database storage (for production)
     """
     
     @abstractmethod

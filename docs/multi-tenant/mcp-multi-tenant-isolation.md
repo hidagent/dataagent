@@ -54,7 +54,7 @@ async def save_user_config(self, user_id: str, config: MCPConfig) -> None:
 **数据库隔离**
 
 ```sql
--- MySQL 表结构已包含 user_id 隔离
+-- PostgreSQL 表结构已包含 user_id 隔离
 CREATE TABLE mcp_servers (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id VARCHAR(255) NOT NULL,  -- 租户隔离键
@@ -302,16 +302,16 @@ manager = MCPConnectionManager(
 ### 2. 数据库配置
 
 ```python
-# 使用 SQLite 或 MySQL 存储配置
-from dataagent_core.mcp import SQLiteMCPConfigStore, MySQLMCPConfigStore
+# 使用 SQLite 或 PostgreSQL 存储配置
+from dataagent_core.mcp import SQLiteMCPConfigStore, PostgreSQLMCPConfigStore
 
 # SQLite（开发环境）
 store = SQLiteMCPConfigStore("sqlite:///mcp_config.db")
 
-# MySQL（生产环境）
+# PostgreSQL（生产环境）
 from sqlalchemy.ext.asyncio import create_async_engine
-engine = create_async_engine("mysql+aiomysql://user:pass@localhost/db")
-store = MySQLMCPConfigStore(engine)
+engine = create_async_engine("postgres+aiopostgres://user:pass@localhost/db")
+store = PostgreSQLMCPConfigStore(engine)
 ```
 
 ### 3. 监控和告警

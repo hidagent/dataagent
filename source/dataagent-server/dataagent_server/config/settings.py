@@ -39,20 +39,20 @@ class ServerSettings(BaseSettings):
     # HITL
     hitl_timeout: int = 300
     
-    # Session storage configuration: memory, sqlite, mysql
-    session_store: Literal["memory", "sqlite", "mysql"] = "sqlite"
+    # Session storage configuration: memory, sqlite, postgres
+    session_store: Literal["memory", "sqlite", "postgres"] = "sqlite"
     
     # SQLite configuration (default for development)
     sqlite_path: str = str(Path.home() / ".dataagent" / "dataagent.db")
     
-    # MySQL configuration
-    mysql_host: str = "localhost"
-    mysql_port: int = 3306
-    mysql_user: str = "root"
-    mysql_password: str = ""
-    mysql_database: str = "dataagent"
-    mysql_pool_size: int = 10
-    mysql_max_overflow: int = 20
+    # PostgreSQL configuration (for production)
+    postgres_host: str = "localhost"
+    postgres_port: int = 5432
+    postgres_user: str = "postgres"
+    postgres_password: str = ""
+    postgres_database: str = "dataagent"
+    postgres_pool_size: int = 10
+    postgres_max_overflow: int = 20
     
     # MCP configuration
     mcp_max_connections_per_user: int = 10
@@ -71,11 +71,11 @@ class ServerSettings(BaseSettings):
         return not self.auth_disabled and len(self.api_keys) > 0
     
     @property
-    def mysql_url(self) -> str:
-        """Get MySQL connection URL for async driver."""
+    def postgres_url(self) -> str:
+        """Get PostgreSQL connection URL for async driver."""
         return (
-            f"mysql+aiomysql://{self.mysql_user}:{self.mysql_password}"
-            f"@{self.mysql_host}:{self.mysql_port}/{self.mysql_database}"
+            f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_database}"
         )
 
 

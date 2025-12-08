@@ -885,8 +885,8 @@ interface ServerMessage {
 | `DATAAGENT_SESSION_TIMEOUT` | 会话超时 (秒) | `3600` |
 | `DATAAGENT_MAX_CONNECTIONS` | 最大连接数 | `200` |
 | `DATAAGENT_SESSION_STORE` | 存储类型 | `memory` |
-| `DATAAGENT_MYSQL_HOST` | MySQL 主机 | `localhost` |
-| `DATAAGENT_MYSQL_PORT` | MySQL 端口 | `3306` |
-| `DATAAGENT_MYSQL_USER` | MySQL 用户 | `root` |
-| `DATAAGENT_MYSQL_PASSWORD` | MySQL 密码 | 空 |
-| `DATAAGENT_MYSQL_DATABASE` | MySQL 数据库 | `dataagent` |
+| `DATAAGENT_MYSQL_HOST` | PostgreSQL 主机 | `localhost` |
+| `DATAAGENT_MYSQL_PORT` | PostgreSQL 端口 | `5432` |
+| `DATAAGENT_MYSQL_USER` | PostgreSQL 用户 | `root` |
+| `DATAAGENT_MYSQL_PASSWORD` | PostgreSQL 密码 | 空 |
+| `DATAAGENT_MYSQL_DATABASE` | PostgreSQL 数据库 | `dataagent` |

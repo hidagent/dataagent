@@ -6,7 +6,7 @@ from dataagent_core.mcp.manager import MCPConnectionManager, MCPConnection
 from dataagent_core.mcp.store import (
     MCPConfigStore,
     MemoryMCPConfigStore,
-    MySQLMCPConfigStore,
+    PostgresMCPConfigStore,
 )
 from dataagent_core.mcp.sqlite_store import SQLiteMCPConfigStore
 
@@ -18,6 +18,6 @@ __all__ = [
     "MCPConnection",
     "MCPConfigStore",
     "MemoryMCPConfigStore",
-    "MySQLMCPConfigStore",
+    "PostgresMCPConfigStore",
     "SQLiteMCPConfigStore",
 ]

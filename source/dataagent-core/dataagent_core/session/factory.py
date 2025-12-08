@@ -16,15 +16,15 @@ class SessionStoreFactory:
     
     @staticmethod
     def create(
-        store_type: Literal["memory", "mysql"],
+        store_type: Literal["memory", "postgres"],
         **kwargs,
     ) -> SessionStore:
         """Create a session store instance.
         
         Args:
-            store_type: Type of store to create ("memory" or "mysql").
+            store_type: Type of store to create ("memory" or "postgres").
             **kwargs: Additional arguments for the store constructor.
-                For MySQL: url, pool_size, max_overflow, pool_recycle
+                For PostgreSQL: url, pool_size, max_overflow, pool_recycle
                 
         Returns:
             SessionStore instance.
@@ -34,9 +34,9 @@ class SessionStoreFactory:
         """
         if store_type == "memory":
             return MemorySessionStore()
-        elif store_type == "mysql":
-            from dataagent_core.session.stores.mysql import MySQLSessionStore
-            return MySQLSessionStore(
+        elif store_type == "postgres":
+            from dataagent_core.session.stores.postgres import PostgresSessionStore
+            return PostgresSessionStore(
                 url=kwargs["url"],
                 pool_size=kwargs.get("pool_size", 10),
                 max_overflow=kwargs.get("max_overflow", 20),
@@ -54,15 +54,15 @@ class MessageStoreFactory:
     
     @staticmethod
     def create(
-        store_type: Literal["memory", "mysql"],
+        store_type: Literal["memory", "postgres"],
         **kwargs,
     ) -> MessageStore:
         """Create a message store instance.
         
         Args:
-            store_type: Type of store to create ("memory" or "mysql").
+            store_type: Type of store to create ("memory" or "postgres").
             **kwargs: Additional arguments for the store constructor.
-                For MySQL: engine (SQLAlchemy AsyncEngine)
+                For PostgreSQL: engine (SQLAlchemy AsyncEngine)
                 
         Returns:
             MessageStore instance.
@@ -72,10 +72,10 @@ class MessageStoreFactory:
         """
         if store_type == "memory":
             return MemoryMessageStore()
-        elif store_type == "mysql":
-            from dataagent_core.session.stores.mysql_message import MySQLMessageStore
+        elif store_type == "postgres":
+            from dataagent_core.session.stores.postgres_message import PostgresMessageStore
             if "engine" not in kwargs:
-                raise ValueError("MySQL message store requires 'engine' argument")
-            return MySQLMessageStore(engine=kwargs["engine"])
+                raise ValueError("PostgreSQL message store requires 'engine' argument")
+            return PostgresMessageStore(engine=kwargs["engine"])
         else:
             raise ValueError(f"Unknown store type: {store_type}")

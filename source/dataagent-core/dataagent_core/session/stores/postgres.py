@@ -1,4 +1,4 @@
-"""MySQL session store implementation using SQLAlchemy."""
+"""PostgreSQL session store implementation using SQLAlchemy."""
 
 import logging
 from datetime import datetime, timedelta
@@ -14,14 +14,14 @@ from dataagent_core.session.store import SessionStore
 logger = logging.getLogger(__name__)
 
 
-class MySQLSessionStore(SessionStore):
-    """MySQL session store implementation.
+class PostgresSessionStore(SessionStore):
+    """PostgreSQL session store implementation.
     
     Uses SQLAlchemy async engine with connection pooling for
     high-concurrency access.
     
     Args:
-        url: MySQL connection URL (mysql+aiomysql://user:pass@host:port/db)
+        url: PostgreSQL connection URL (postgresql+asyncpg://user:pass@host:port/db)
         pool_size: Number of connections to keep in the pool.
         max_overflow: Maximum overflow connections beyond pool_size.
         pool_recycle: Seconds before a connection is recycled.
@@ -54,12 +54,12 @@ class MySQLSessionStore(SessionStore):
         """
         async with self._engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-        logger.info("Database tables initialized")
+        logger.info("PostgreSQL database tables initialized")
     
     async def close(self) -> None:
         """Close the database engine and release connections."""
         await self._engine.dispose()
-        logger.info("Database connections closed")
+        logger.info("PostgreSQL connections closed")
     
     def _model_to_session(self, model: SessionModel) -> Session:
         """Convert SQLAlchemy model to Session dataclass."""

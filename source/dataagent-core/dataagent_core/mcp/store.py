@@ -140,8 +140,8 @@ class MemoryMCPConfigStore(MCPConfigStore):
         return config.get_server(server_name)
 
 
-class MySQLMCPConfigStore(MCPConfigStore):
-    """MySQL-based MCP configuration storage."""
+class PostgresMCPConfigStore(MCPConfigStore):
+    """PostgreSQL-based MCP configuration storage."""
     
     def __init__(self, engine: AsyncEngine) -> None:
         """Initialize with SQLAlchemy async engine.
@@ -161,26 +161,29 @@ class MySQLMCPConfigStore(MCPConfigStore):
         
         create_table_sql = """
         CREATE TABLE IF NOT EXISTS mcp_servers (
-            id INT AUTO_INCREMENT PRIMARY KEY,
+            id SERIAL PRIMARY KEY,
             user_id VARCHAR(255) NOT NULL,
             server_name VARCHAR(255) NOT NULL,
             command VARCHAR(255) NOT NULL,
-            args JSON,
-            env JSON,
+            args JSONB,
+            env JSONB,
             disabled BOOLEAN DEFAULT FALSE,
-            auto_approve JSON,
+            auto_approve JSONB,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            UNIQUE KEY unique_user_server (user_id, server_name),
-            INDEX idx_user_id (user_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (user_id, server_name)
+        )
         """
         
         async with self.engine.begin() as conn:
             await conn.execute(text(create_table_sql))
+            # Create index if not exists
+            await conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS idx_mcp_servers_user_id ON mcp_servers(user_id)"
+            ))
         
         self._table_created = True
-        logger.info("MCP servers table initialized")
+        logger.info("PostgreSQL MCP servers table initialized")
     
     async def get_user_config(self, user_id: str) -> MCPConfig:
         await self.init_tables()
@@ -243,12 +246,13 @@ class MySQLMCPConfigStore(MCPConfigStore):
         query = text("""
             INSERT INTO mcp_servers (user_id, server_name, command, args, env, disabled, auto_approve)
             VALUES (:user_id, :server_name, :command, :args, :env, :disabled, :auto_approve)
-            ON DUPLICATE KEY UPDATE
-                command = VALUES(command),
-                args = VALUES(args),
-                env = VALUES(env),
-                disabled = VALUES(disabled),
-                auto_approve = VALUES(auto_approve)
+            ON CONFLICT (user_id, server_name) DO UPDATE SET
+                command = EXCLUDED.command,
+                args = EXCLUDED.args,
+                env = EXCLUDED.env,
+                disabled = EXCLUDED.disabled,
+                auto_approve = EXCLUDED.auto_approve,
+                updated_at = CURRENT_TIMESTAMP
         """)
         
         async with self.engine.begin() as conn:

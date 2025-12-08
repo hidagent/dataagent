@@ -27,6 +27,8 @@ class WebSocketChatHandler:
         mcp_store: Any | None = None,
         mcp_connection_manager: Any | None = None,
         user_profile_store: Any | None = None,
+        session_store: Any | None = None,
+        message_store: Any | None = None,
     ):
         """Initialize chat handler.
         
@@ -37,6 +39,8 @@ class WebSocketChatHandler:
             mcp_store: MCP configuration store.
             mcp_connection_manager: MCP connection manager.
             user_profile_store: User profile store for user context.
+            session_store: Session store for persisting sessions.
+            message_store: Message store for persisting messages.
         """
         self.connections = connection_manager
         self.agent_factory = agent_factory
@@ -44,6 +48,8 @@ class WebSocketChatHandler:
         self.mcp_store = mcp_store
         self.mcp_connection_manager = mcp_connection_manager
         self.user_profile_store = user_profile_store
+        self.session_store = session_store
+        self.message_store = message_store
         self._executors: dict[str, Any] = {}  # session_id -> AgentExecutor
         self._session_users: dict[str, str] = {}  # session_id -> user_id
         self._session_user_contexts: dict[str, dict] = {}  # session_id -> user_context
@@ -156,7 +162,9 @@ class WebSocketChatHandler:
         Returns:
             AgentExecutor instance.
         """
-        if session_id in self._executors:
+        is_new_session = session_id not in self._executors
+        
+        if not is_new_session:
             return self._executors[session_id]
         
         if self.agent_factory is None:
@@ -172,10 +180,14 @@ class WebSocketChatHandler:
         )
         
         # Create agent config - use session_id as assistant_id for isolation
+        assistant_id = f"server-{session_id[:8]}"
         config = AgentConfig(
-            assistant_id=f"server-{session_id[:8]}",
+            assistant_id=assistant_id,
             auto_approve=False,  # Enable HITL
         )
+        
+        # Persist new session to s_session table
+        await self._persist_session(session_id, user_id, assistant_id)
         
         # Load MCP tools for the user
         extra_tools = []
@@ -415,6 +427,59 @@ class WebSocketChatHandler:
         })
         
         logger.info(f"User context set for session {session_id}: {user_id}")
+    
+    async def _persist_session(
+        self,
+        session_id: str,
+        user_id: str,
+        assistant_id: str,
+    ) -> None:
+        """Persist a new session to the s_session table.
+        
+        Uses the server's database models (s_session) for persistence.
+        This is separate from LangGraph's checkpointer which handles
+        agent execution state.
+        
+        Args:
+            session_id: Session ID.
+            user_id: User ID.
+            assistant_id: Assistant ID.
+        """
+        try:
+            from dataagent_server.database.factory import get_db_session
+            from dataagent_server.database.models import SSession
+            from datetime import datetime, timezone
+            
+            async with get_db_session() as db:
+                # Check if session already exists
+                from sqlalchemy import select
+                result = await db.execute(
+                    select(SSession).where(SSession.session_id == session_id)
+                )
+                existing = result.scalar_one_or_none()
+                
+                now = datetime.now(timezone.utc)
+                if existing is None:
+                    # Create new session record
+                    session = SSession(
+                        session_id=session_id,
+                        user_id=user_id,
+                        assistant_id=assistant_id,
+                        title=f"Session {session_id[:8]}",
+                        created_at=now,
+                        last_active=now,
+                    )
+                    db.add(session)
+                    await db.commit()
+                    logger.info(f"Persisted new session {session_id} for user {user_id}")
+                else:
+                    # Update last_active
+                    existing.last_active = now
+                    await db.commit()
+                    logger.debug(f"Updated session {session_id} last_active")
+        except Exception as e:
+            # Log but don't fail - session persistence is best-effort
+            logger.warning(f"Failed to persist session {session_id}: {e}")
     
     async def _send_error(
         self,

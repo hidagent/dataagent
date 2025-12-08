@@ -7,7 +7,7 @@ DataAgent 是基于 DeepAgent 构建的数据智能助手平台，支持终端�
 - **多端支持**: CLI 终端交互和 Web API 服务
 - **流式输出**: 实时流式响应，支持 WebSocket 和 SSE
 - **人机交互 (HITL)**: 敏感操作需用户审批，支持自动审批模式
-- **会话管理**: 支持多会话、会话持久化（内存/MySQL）
+- **会话管理**: 支持多会话、会话持久化（内存/SQLite/PostgreSQL）
 - **MCP 集成**: 支持 Model Context Protocol 扩展工具
 - **中间件系统**: 长期记忆、技能系统、Shell 执行
 - **高并发**: 支持 100+ 用户同时问答
@@ -187,13 +187,13 @@ Web 服务层，提供：
 # 内存存储（默认）
 DATAAGENT_SESSION_STORE=memory
 
-# MySQL 存储
-DATAAGENT_SESSION_STORE=mysql
-DATAAGENT_MYSQL_HOST=localhost
-DATAAGENT_MYSQL_PORT=3306
-DATAAGENT_MYSQL_USER=dataagent
-DATAAGENT_MYSQL_PASSWORD=your_password
-DATAAGENT_MYSQL_DATABASE=dataagent
+# PostgreSQL 存储（生产环境推荐）
+DATAAGENT_SESSION_STORE=postgres
+DATAAGENT_POSTGRES_HOST=localhost
+DATAAGENT_POSTGRES_PORT=5432
+DATAAGENT_POSTGRES_USER=dataagent
+DATAAGENT_POSTGRES_PASSWORD=your_password
+DATAAGENT_POSTGRES_DATABASE=dataagent
 ```
 
 ## 事件类型

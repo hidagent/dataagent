@@ -1,6 +1,7 @@
 """API v1 routes."""
 
 from dataagent_server.api.v1 import (
+    auth,
     chat,
     chat_stream,
     health,
@@ -13,6 +14,7 @@ from dataagent_server.api.v1 import (
 )
 
 __all__ = [
+    "auth",
     "chat",
     "chat_stream",
     "health",

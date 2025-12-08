@@ -1,4 +1,4 @@
-"""MySQL message store implementation using SQLAlchemy."""
+"""PostgreSQL message store implementation using SQLAlchemy."""
 
 import logging
 from typing import Any
@@ -13,11 +13,11 @@ from dataagent_core.session.models import MessageModel
 logger = logging.getLogger(__name__)
 
 
-class MySQLMessageStore(MessageStore):
-    """MySQL message store implementation.
+class PostgresMessageStore(MessageStore):
+    """PostgreSQL message store implementation.
     
     Uses SQLAlchemy async engine with connection pooling.
-    Shares the engine with MySQLSessionStore for efficiency.
+    Shares the engine with PostgresSessionStore for efficiency.
     
     Args:
         engine: SQLAlchemy async engine (shared with session store).
