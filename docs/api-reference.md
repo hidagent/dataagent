@@ -7,6 +7,7 @@
 - Base URL: `http://localhost:8000/api/v1`
 - Content-Type: `application/json`
 - 认证: `X-API-Key` Header (可选，通过 `DATAAGENT_API_KEYS` 配置)
+- 用户标识: `X-User-ID` Header (用于多租户隔离)
 
 ### 健康检查
 
@@ -25,7 +26,7 @@ GET /api/v1/health
 
 ### 聊天
 
-#### 发送消息
+#### 发送消息（同步）
 
 ```
 POST /api/v1/chat
@@ -36,7 +37,14 @@ POST /api/v1/chat
 {
   "message": "你好",
   "session_id": "optional-session-id",
-  "assistant_id": "optional-assistant-id"
+  "assistant_id": "optional-assistant-id",
+  "user_context": {
+    "user_id": "user123",
+    "username": "zhangsan",
+    "display_name": "张三",
+    "department": "技术部",
+    "role": "开发工程师"
+  }
 }
 ```
 
@@ -60,6 +68,29 @@ POST /api/v1/chat
   ]
 }
 ```
+
+#### 发送消息（SSE 流式）
+
+```
+POST /api/v1/chat/stream
+```
+
+**请求:** 同上
+
+**响应:** Server-Sent Events 流
+
+```
+data: {"event_type": "text", "data": {"content": "你好", "is_final": false}}
+
+data: {"event_type": "text", "data": {"content": "！", "is_final": false}}
+
+data: {"event_type": "done", "data": {"cancelled": false}}
+
+data: {"event_type": "stream_end", "data": {}}
+```
+
+**响应头:**
+- `X-Session-ID`: 会话 ID
 
 #### 取消聊天
 
@@ -136,6 +167,449 @@ GET /api/v1/sessions/{session_id}/messages?limit=100&offset=0
 }
 ```
 
+### 助手管理
+
+#### 列出助手
+
+```
+GET /api/v1/assistants
+```
+
+**响应:**
+```json
+{
+  "assistants": [
+    {
+      "assistant_id": "default",
+      "name": "Default Assistant",
+      "description": "默认助手",
+      "model": null,
+      "system_prompt": null,
+      "tools": null,
+      "auto_approve": false,
+      "metadata": null
+    }
+  ],
+  "total": 1
+}
+```
+
+#### 获取助手详情
+
+```
+GET /api/v1/assistants/{assistant_id}
+```
+
+#### 创建助手
+
+```
+POST /api/v1/assistants
+```
+
+**请求:**
+```json
+{
+  "name": "代码助手",
+  "description": "专注于代码开发的助手",
+  "model": "gpt-4",
+  "system_prompt": "你是一个专业的代码开发助手...",
+  "tools": ["shell", "file_write"],
+  "auto_approve": false,
+  "metadata": {"category": "development"}
+}
+```
+
+#### 更新助手
+
+```
+PUT /api/v1/assistants/{assistant_id}
+```
+
+#### 删除助手
+
+```
+DELETE /api/v1/assistants/{assistant_id}
+```
+
+### 用户档案管理
+
+#### 列出用户档案
+
+```
+GET /api/v1/user-profiles
+```
+
+**响应:**
+```json
+{
+  "profiles": [
+    {
+      "user_id": "user123",
+      "username": "zhangsan",
+      "display_name": "张三",
+      "email": "zhangsan@example.com",
+      "department": "技术部",
+      "role": "开发工程师",
+      "custom_fields": {},
+      "created_at": "2024-01-01T00:00:00",
+      "updated_at": "2024-01-01T00:00:00"
+    }
+  ],
+  "total": 1
+}
+```
+
+#### 获取用户档案
+
+```
+GET /api/v1/user-profiles/{user_id}
+```
+
+#### 创建用户档案
+
+```
+POST /api/v1/user-profiles
+```
+
+**请求:**
+```json
+{
+  "user_id": "user123",
+  "username": "zhangsan",
+  "display_name": "张三",
+  "email": "zhangsan@example.com",
+  "department": "技术部",
+  "role": "开发工程师",
+  "custom_fields": {"team": "AI团队"}
+}
+```
+
+#### 更新用户档案
+
+```
+PUT /api/v1/user-profiles/{user_id}
+```
+
+#### 删除用户档案
+
+```
+DELETE /api/v1/user-profiles/{user_id}
+```
+
+### 用户记忆管理
+
+#### 获取用户记忆状态
+
+```
+GET /api/v1/users/{user_id}/memory/status
+```
+
+**响应:**
+```json
+{
+  "exists": true,
+  "path": "/home/user/.deepagents/users/user123",
+  "size_bytes": 1024,
+  "file_count": 5
+}
+```
+
+#### 清除用户记忆
+
+```
+DELETE /api/v1/users/{user_id}/memory
+```
+
+**响应:**
+```json
+{
+  "success": true,
+  "message": "Memory cleared for user user123"
+}
+```
+
+### MCP 服务器管理
+
+MCP (Model Context Protocol) 服务器用于扩展 Agent 的工具能力。
+
+#### 列出 MCP 服务器
+
+```
+GET /api/v1/users/{user_id}/mcp-servers
+```
+
+**响应:**
+```json
+{
+  "servers": [
+    {
+      "name": "aws-docs",
+      "command": "uvx",
+      "args": ["awslabs.aws-documentation-mcp-server@latest"],
+      "env": {},
+      "url": null,
+      "disabled": false,
+      "auto_approve": [],
+      "status": "connected",
+      "connected": true,
+      "tools_count": 5,
+      "error": null
+    }
+  ]
+}
+```
+
+#### 添加 MCP 服务器
+
+```
+POST /api/v1/users/{user_id}/mcp-servers
+```
+
+**请求 (命令行方式):**
+```json
+{
+  "name": "my-mcp-server",
+  "command": "uvx",
+  "args": ["my-mcp-package@latest"],
+  "env": {"API_KEY": "xxx"},
+  "disabled": false,
+  "autoApprove": ["tool1", "tool2"]
+}
+```
+
+**请求 (HTTP/SSE 方式):**
+```json
+{
+  "name": "remote-mcp",
+  "url": "http://localhost:3000/mcp",
+  "transport": "sse",
+  "headers": {"Authorization": "Bearer xxx"},
+  "disabled": false
+}
+```
+
+#### 获取 MCP 服务器详情
+
+```
+GET /api/v1/users/{user_id}/mcp-servers/{server_name}
+```
+
+#### 更新 MCP 服务器
+
+```
+PUT /api/v1/users/{user_id}/mcp-servers/{server_name}
+```
+
+#### 删除 MCP 服务器
+
+```
+DELETE /api/v1/users/{user_id}/mcp-servers/{server_name}
+```
+
+#### 获取 MCP 服务器状态
+
+```
+GET /api/v1/users/{user_id}/mcp-servers/{server_name}/status
+```
+
+**响应:**
+```json
+{
+  "name": "aws-docs",
+  "status": "connected",
+  "connected": true,
+  "tools_count": 5,
+  "tools": ["search_docs", "get_doc", "list_services", "get_api", "get_examples"],
+  "error": null,
+  "disabled": false
+}
+```
+
+#### 启用/禁用 MCP 服务器
+
+```
+POST /api/v1/users/{user_id}/mcp-servers/{server_name}/toggle
+```
+
+**请求:**
+```json
+{
+  "disabled": true
+}
+```
+
+#### 连接 MCP 服务器
+
+```
+POST /api/v1/users/{user_id}/mcp-servers/{server_name}/connect
+```
+
+**响应:**
+```json
+{
+  "success": true,
+  "status": "connected",
+  "tools_count": 5,
+  "tools": ["tool1", "tool2", "tool3", "tool4", "tool5"],
+  "error": null
+}
+```
+
+#### 断开 MCP 服务器
+
+```
+POST /api/v1/users/{user_id}/mcp-servers/{server_name}/disconnect
+```
+
+### 规则管理
+
+规则用于定制 Agent 的行为和响应方式。
+
+#### 列出规则
+
+```
+GET /api/v1/users/{user_id}/rules?scope=user
+```
+
+**参数:**
+- `scope`: 可选，过滤规则范围 (global, user, project, session)
+
+**响应:**
+```json
+{
+  "rules": [
+    {
+      "name": "code-style",
+      "description": "代码风格规范",
+      "content": "请遵循 PEP8 代码风格...",
+      "scope": "user",
+      "inclusion": "always",
+      "file_match_pattern": null,
+      "priority": 50,
+      "override": false,
+      "enabled": true,
+      "source_path": "/home/user/.deepagents/users/user123/rules/code-style.md"
+    }
+  ],
+  "total": 1
+}
+```
+
+#### 获取规则详情
+
+```
+GET /api/v1/users/{user_id}/rules/{rule_name}
+```
+
+#### 创建规则
+
+```
+POST /api/v1/users/{user_id}/rules
+```
+
+**请求:**
+```json
+{
+  "name": "code-review",
+  "description": "代码审查规范",
+  "content": "在审查代码时，请关注以下几点：\n1. 代码可读性\n2. 性能优化\n3. 安全性",
+  "scope": "user",
+  "inclusion": "always",
+  "file_match_pattern": null,
+  "priority": 50,
+  "override": false,
+  "enabled": true
+}
+```
+
+**inclusion 可选值:**
+- `always`: 始终包含
+- `file_match`: 当文件匹配 `file_match_pattern` 时包含
+- `manual`: 手动触发时包含
+
+#### 更新规则
+
+```
+PUT /api/v1/users/{user_id}/rules/{rule_name}
+```
+
+**请求:**
+```json
+{
+  "description": "更新后的描述",
+  "content": "更新后的内容",
+  "enabled": false
+}
+```
+
+#### 删除规则
+
+```
+DELETE /api/v1/users/{user_id}/rules/{rule_name}
+```
+
+#### 验证规则内容
+
+```
+POST /api/v1/users/{user_id}/rules/validate
+```
+
+**请求:**
+```json
+{
+  "content": "规则内容..."
+}
+```
+
+**响应:**
+```json
+{
+  "valid": true,
+  "errors": [],
+  "warnings": ["建议添加更详细的描述"]
+}
+```
+
+#### 检测规则冲突
+
+```
+GET /api/v1/users/{user_id}/rules/conflicts/list
+```
+
+**响应:**
+```json
+{
+  "conflicts": [
+    {
+      "rule1_name": "rule-a",
+      "rule1_scope": "global",
+      "rule2_name": "rule-b",
+      "rule2_scope": "user",
+      "conflict_type": "override",
+      "resolution": "user scope rule takes precedence",
+      "details": ""
+    }
+  ],
+  "warnings": [],
+  "total_conflicts": 1
+}
+```
+
+#### 重新加载规则
+
+```
+POST /api/v1/users/{user_id}/rules/reload
+```
+
+**响应:**
+```json
+{
+  "success": true,
+  "rules_count": 10,
+  "message": "Reloaded 10 rules successfully"
+}
+```
+
 ---
 
 ## WebSocket 协议
@@ -150,7 +624,7 @@ ws://localhost:8000/ws/chat/{session_id}
 
 ```typescript
 interface ClientMessage {
-  type: "chat" | "hitl_decision" | "cancel" | "ping";
+  type: "chat" | "hitl_decision" | "cancel" | "ping" | "set_user_context";
   payload: object;
 }
 ```
@@ -161,7 +635,29 @@ interface ClientMessage {
 {
   "type": "chat",
   "payload": {
-    "message": "你好"
+    "message": "你好",
+    "user_id": "user123",
+    "user_context": {
+      "user_id": "user123",
+      "display_name": "张三",
+      "department": "技术部"
+    }
+  }
+}
+```
+
+#### 设置用户上下文
+
+```json
+{
+  "type": "set_user_context",
+  "payload": {
+    "user_id": "user123",
+    "username": "zhangsan",
+    "display_name": "张三",
+    "department": "技术部",
+    "role": "开发工程师",
+    "custom_fields": {}
   }
 }
 ```

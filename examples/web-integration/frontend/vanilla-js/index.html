@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DataAgent Chat Demo</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background: #1a73e8;
+            color: white;
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header h1 {
+            font-size: 20px;
+            font-weight: 500;
+        }
+        
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+        
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ff5252;
+        }
+        
+        .status-dot.connected {
+            background: #4caf50;
+        }
+        
+        .main-container {
+            flex: 1;
+            display: flex;
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 20px;
+            gap: 20px;
+            overflow: hidden;
+        }
+        
+        .chat-container {
+            flex: 1;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .sidebar {
+            width: 280px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 16px;
+            overflow-y: auto;
+        }
+        
+        .sidebar h3 {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .config-group {
+            margin-bottom: 16px;
+        }
+        
+        .config-group label {
+            display: block;
+            font-size: 13px;
+            color: #333;
+            margin-bottom: 6px;
+        }
+        
+        .config-group input, .config-group select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        
+        .message {
+            margin-bottom: 16px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .message.user {
+            align-items: flex-end;
+        }
+        
+        .message.assistant {
+            align-items: flex-start;
+        }
+        
+        .message-content {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 16px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+        }
+        
+        .message.user .message-content {
+            background: #1a73e8;
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+        
+        .message.assistant .message-content {
+            background: #f0f0f0;
+            color: #333;
+            border-bottom-left-radius: 4px;
+        }
+        
+        .message-meta {
+            font-size: 11px;
+            color: #999;
+            margin-top: 4px;
+        }
+        
+        .tool-call {
+            background: #fff3e0;
+            border-left: 3px solid #ff9800;
+            padding: 8px 12px;
+            margin: 8px 0;
+            border-radius: 0 8px 8px 0;
+            font-size: 13px;
+        }
+        
+        .tool-call .tool-name {
+            font-weight: 600;
+            color: #e65100;
+        }
+        
+        .input-container {
+            padding: 16px 20px;
+            border-top: 1px solid #eee;
+            display: flex;
+            gap: 12px;
+        }
+        
+        .input-container input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid #ddd;
+            border-radius: 24px;
+            font-size: 15px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        
+        .input-container input:focus {
+            border-color: #1a73e8;
+        }
+        
+        .input-container button {
+            padding: 12px 24px;
+            background: #1a73e8;
+            color: white;
+            border: none;
+            border-radius: 24px;
+            font-size: 15px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .input-container button:hover {
+            background: #1557b0;
+        }
+        
+        .input-container button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .typing-indicator {
+            display: none;
+            padding: 12px 16px;
+            background: #f0f0f0;
+            border-radius: 16px;
+            color: #666;
+            font-style: italic;
+        }
+        
+        .typing-indicator.visible {
+            display: inline-block;
+        }
+        
+        .mode-toggle {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        
+        .mode-toggle button {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        
+        .mode-toggle button.active {
+            background: #1a73e8;
+            color: white;
+            border-color: #1a73e8;
+        }
+        
+        .hitl-dialog {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .hitl-dialog.visible {
+            display: flex;
+        }
+        
+        .hitl-content {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            max-width: 500px;
+            width: 90%;
+        }
+        
+        .hitl-content h3 {
+            margin-bottom: 16px;
+            color: #333;
+        }
+        
+        .hitl-action {
+            background: #f5f5f5;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-family: monospace;
+            font-size: 13px;
+        }
+        
+        .hitl-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+        
+        .hitl-buttons button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .hitl-buttons .approve {
+            background: #4caf50;
+            color: white;
+        }
+        
+        .hitl-buttons .reject {
+            background: #f44336;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>DataAgent Chat</h1>
+        <div class="connection-status">
+            <span class="status-dot" id="statusDot"></span>
+            <span id="statusText">未连接</span>
+        </div>
+    </div>
+    
+    <div class="main-container">
+        <div class="chat-container">
+            <div class="messages" id="messages">
+                <div class="message assistant">
+                    <div class="message-content">你好！我是 DataAgent，有什么可以帮助你的？</div>
+                </div>
+            </div>
+            <div class="input-container">
+                <input type="text" id="messageInput" placeholder="输入消息..." />
+                <button id="sendBtn" onclick="sendMessage()">发送</button>
+            </div>
+        </div>
+        
+        <div class="sidebar">
+            <h3>连接设置</h3>
+            
+            <div class="config-group">
+                <label>服务器地址</label>
+                <input type="text" id="serverUrl" value="http://localhost:8000" />
+            </div>
+            
+            <div class="config-group">
+                <label>API Key (可选)</label>
+                <input type="password" id="apiKey" placeholder="输入 API Key" />
+            </div>
+            
+            <div class="config-group">
+                <label>用户 ID</label>
+                <input type="text" id="userId" value="demo-user" />
+            </div>
+            
+            <div class="config-group">
+                <label>会话 ID</label>
+                <input type="text" id="sessionId" value="" placeholder="自动生成" />
+            </div>
+            
+            <h3>通信模式</h3>
+            <div class="mode-toggle">
+                <button id="modeRest" class="active" onclick="setMode('rest')">REST</button>
+                <button id="modeSSE" onclick="setMode('sse')">SSE 流式</button>
+                <button id="modeWS" onclick="setMode('ws')">WebSocket</button>
+            </div>
+            
+            <div class="config-group">
+                <button onclick="connect()" style="width:100%;padding:10px;background:#4caf50;color:white;border:none;border-radius:6px;cursor:pointer;">
+                    连接 / 重连
+                </button>
+            </div>
+            
+            <div class="config-group">
+                <button onclick="clearChat()" style="width:100%;padding:10px;background:#ff9800;color:white;border:none;border-radius:6px;cursor:pointer;">
+                    清空对话
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- HITL 审批对话框 -->
+    <div class="hitl-dialog" id="hitlDialog">
+        <div class="hitl-content">
+            <h3>操作审批请求</h3>
+            <p>Agent 请求执行以下操作：</p>
+            <div class="hitl-action" id="hitlAction"></div>
+            <div class="hitl-buttons">
+                <button class="reject" onclick="hitlDecision('reject')">拒绝</button>
+                <button class="approve" onclick="hitlDecision('approve')">批准</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 状态管理
+        let currentMode = 'rest';
+        let websocket = null;
+        let sessionId = '';
+        let isProcessing = false;
+        
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            sessionId = generateSessionId();
+            document.getElementById('sessionId').value = sessionId;
+            
+            document.getElementById('messageInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+        });
+        
+        function generateSessionId() {
+            return 'session-' + Math.random().toString(36).substr(2, 9);
+        }
+        
+        function setMode(mode) {
+            currentMode = mode;
+            document.querySelectorAll('.mode-toggle button').forEach(btn => btn.classList.remove('active'));
+            document.getElementById('mode' + mode.charAt(0).toUpperCase() + mode.slice(1).replace('sse', 'SSE').replace('ws', 'WS')).classList.add('active');
+            
+            if (mode !== 'ws' && websocket) {
+                websocket.close();
+                websocket = null;
+                updateStatus(false);
+            }
+        }
+        
+        function updateStatus(connected) {
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+            
+            if (connected) {
+                dot.classList.add('connected');
+                text.textContent = '已连接';
+            } else {
+                dot.classList.remove('connected');
+                text.textContent = currentMode === 'ws' ? '未连接' : 'REST 模式';
+            }
+        }
+        
+        function connect() {
+            sessionId = document.getElementById('sessionId').value || generateSessionId();
+            document.getElementById('sessionId').value = sessionId;
+            
+            if (currentMode === 'ws') {
+                connectWebSocket();
+            } else {
+                updateStatus(true);
+                addSystemMessage('已切换到 ' + (currentMode === 'sse' ? 'SSE 流式' : 'REST') + ' 模式');
+            }
+        }
+        
+        function connectWebSocket() {
+            const serverUrl = document.getElementById('serverUrl').value;
+            const wsUrl = serverUrl.replace('http', 'ws') + '/ws/chat/' + sessionId;
+            
+            if (websocket) {
+                websocket.close();
+            }
+            
+            websocket = new WebSocket(wsUrl);
+            
+            websocket.onopen = () => {
+                updateStatus(true);
+                addSystemMessage('WebSocket 连接已建立');
+            };
+            
+            websocket.onclose = () => {
+                updateStatus(false);
+                addSystemMessage('WebSocket 连接已断开');
+            };
+            
+            websocket.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                addSystemMessage('WebSocket 连接错误');
+            };
+            
+            websocket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleServerEvent(data);
+            };
+        }
+        
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (!message || isProcessing) return;
+            
+            input.value = '';
+            addMessage('user', message);
+            
+            isProcessing = true;
+            document.getElementById('sendBtn').disabled = true;
+            
+            try {
+                if (currentMode === 'ws') {
+                    sendWebSocketMessage(message);
+                } else if (currentMode === 'sse') {
+                    await sendSSEMessage(message);
+                } else {
+                    await sendRestMessage(message);
+                }
+            } catch (error) {
+                console.error('Send error:', error);
+                addSystemMessage('发送失败: ' + error.message);
+            } finally {
+                isProcessing = false;
+                document.getElementById('sendBtn').disabled = false;
+            }
+        }
+        
+        function sendWebSocketMessage(message) {
+            if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+                addSystemMessage('WebSocket 未连接，请先连接');
+                return;
+            }
+            
+            const userId = document.getElementById('userId').value;
+            
+            websocket.send(JSON.stringify({
+                type: 'chat',
+                payload: {
+                    message: message,
+                    user_id: userId
+                }
+            }));
+            
+            showTypingIndicator();
+        }
+        
+        async function sendSSEMessage(message) {
+            const serverUrl = document.getElementById('serverUrl').value;
+            const apiKey = document.getElementById('apiKey').value;
+            const userId = document.getElementById('userId').value;
+            
+            const headers = {
+                'Content-Type': 'application/json',
+                'X-User-ID': userId
+            };
+            
+            if (apiKey) {
+                headers['X-API-Key'] = apiKey;
+            }
+            
+            showTypingIndicator();
+            
+            const response = await fetch(serverUrl + '/api/v1/chat/stream', {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify({
+                    message: message,
+                    session_id: sessionId
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
+            }
+            
+            // 获取 session_id
+            const newSessionId = response.headers.get('X-Session-ID');
+            if (newSessionId) {
+                sessionId = newSessionId;
+                document.getElementById('sessionId').value = sessionId;
+            }
+            
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let currentContent = '';
+            let messageElement = null;
+            
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\n');
+                
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const data = JSON.parse(line.slice(6));
+                        
+                        if (data.event_type === 'text') {
+                            if (!messageElement) {
+                                hideTypingIndicator();
+                                messageElement = addMessage('assistant', '', true);
+                            }
+                            currentContent += data.data?.content || data.content || '';
+                            messageElement.querySelector('.message-content').textContent = currentContent;
+                            scrollToBottom();
+                        } else if (data.event_type === 'tool_call') {
+                            addToolCall(data.data || data);
+                        } else if (data.event_type === 'done' || data.event_type === 'stream_end') {
+                            hideTypingIndicator();
+                        }
+                    }
+                }
+            }
+        }
+        
+        async function sendRestMessage(message) {
+            const serverUrl = document.getElementById('serverUrl').value;
+            const apiKey = document.getElementById('apiKey').value;
+            const userId = document.getElementById('userId').value;
+            
+            const headers = {
+                'Content-Type': 'application/json',
+                'X-User-ID': userId
+            };
+            
+            if (apiKey) {
+                headers['X-API-Key'] = apiKey;
+            }
+            
+            showTypingIndicator();
+            
+            const response = await fetch(serverUrl + '/api/v1/chat', {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify({
+                    message: message,
+                    session_id: sessionId
+                })
+            });
+            
+            hideTypingIndicator();
+            
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
+            }
+            
+            const data = await response.json();
+            sessionId = data.session_id;
+            document.getElementById('sessionId').value = sessionId;
+            
+            // 处理事件
+            let fullContent = '';
+            for (const event of data.events) {
+                if (event.event_type === 'text') {
+                    fullContent += event.content || '';
+                } else if (event.event_type === 'tool_call') {
+                    addToolCall(event);
+                }
+            }
+            
+            if (fullContent) {
+                addMessage('assistant', fullContent);
+            }
+        }
+        
+        function handleServerEvent(data) {
+            const eventType = data.event_type;
+            const eventData = data.data || {};
+            
+            switch (eventType) {
+                case 'connected':
+                    console.log('Connected to session:', eventData.session_id);
+                    break;
+                    
+                case 'text':
+                    hideTypingIndicator();
+                    if (eventData.is_final) {
+                        addMessage('assistant', eventData.content);
+                    } else {
+                        updateStreamingMessage(eventData.content);
+                    }
+                    break;
+                    
+                case 'tool_call':
+                    addToolCall(eventData);
+                    break;
+                    
+                case 'tool_result':
+                    console.log('Tool result:', eventData);
+                    break;
+                    
+                case 'hitl':
+                    showHITLDialog(eventData.action);
+                    break;
+                    
+                case 'done':
+                    hideTypingIndicator();
+                    if (eventData.cancelled) {
+                        addSystemMessage('操作已取消');
+                    }
+                    break;
+                    
+                case 'error':
+                    hideTypingIndicator();
+                    addSystemMessage('错误: ' + eventData.message);
+                    break;
+                    
+                case 'pong':
+                    console.log('Pong received');
+                    break;
+            }
+        }
+        
+        let streamingMessageElement = null;
+        
+        function updateStreamingMessage(content) {
+            if (!streamingMessageElement) {
+                streamingMessageElement = addMessage('assistant', content, true);
+            } else {
+                const contentEl = streamingMessageElement.querySelector('.message-content');
+                contentEl.textContent += content;
+            }
+            scrollToBottom();
+        }
+        
+        function addMessage(role, content, isStreaming = false) {
+            const messagesContainer = document.getElementById('messages');
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message ' + role;
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.textContent = content;
+            
+            const metaDiv = document.createElement('div');
+            metaDiv.className = 'message-meta';
+            metaDiv.textContent = new Date().toLocaleTimeString();
+            
+            messageDiv.appendChild(contentDiv);
+            messageDiv.appendChild(metaDiv);
+            messagesContainer.appendChild(messageDiv);
+            
+            if (!isStreaming) {
+                streamingMessageElement = null;
+            }
+            
+            scrollToBottom();
+            return messageDiv;
+        }
+        
+        function addToolCall(data) {
+            const messagesContainer = document.getElementById('messages');
+            
+            const toolDiv = document.createElement('div');
+            toolDiv.className = 'tool-call';
+            toolDiv.innerHTML = '<span class="tool-name">🔧 ' + (data.tool_name || 'Tool') + '</span>: ' + 
+                JSON.stringify(data.tool_args || data.args || {}, null, 2);
+            
+            messagesContainer.appendChild(toolDiv);
+            scrollToBottom();
+        }
+        
+        function addSystemMessage(text) {
+            const messagesContainer = document.getElementById('messages');
+            
+            const msgDiv = document.createElement('div');
+            msgDiv.style.cssText = 'text-align:center;color:#999;font-size:12px;margin:8px 0;';
+            msgDiv.textContent = '— ' + text + ' —';
+            
+            messagesContainer.appendChild(msgDiv);
+            scrollToBottom();
+        }
+        
+        function showTypingIndicator() {
+            let indicator = document.querySelector('.typing-indicator');
+            if (!indicator) {
+                indicator = document.createElement('div');
+                indicator.className = 'typing-indicator';
+                indicator.textContent = 'Agent 正在思考...';
+                document.getElementById('messages').appendChild(indicator);
+            }
+            indicator.classList.add('visible');
+            scrollToBottom();
+        }
+        
+        function hideTypingIndicator() {
+            const indicator = document.querySelector('.typing-indicator');
+            if (indicator) {
+                indicator.classList.remove('visible');
+            }
+        }
+        
+        function scrollToBottom() {
+            const messages = document.getElementById('messages');
+            messages.scrollTop = messages.scrollHeight;
+        }
+        
+        function clearChat() {
+            const messagesContainer = document.getElementById('messages');
+            messagesContainer.innerHTML = '<div class="message assistant"><div class="message-content">你好！我是 DataAgent，有什么可以帮助你的？</div></div>';
+            sessionId = generateSessionId();
+            document.getElementById('sessionId').value = sessionId;
+            streamingMessageElement = null;
+        }
+        
+        // HITL 相关
+        function showHITLDialog(action) {
+            const dialog = document.getElementById('hitlDialog');
+            const actionDiv = document.getElementById('hitlAction');
+            
+            actionDiv.textContent = JSON.stringify(action, null, 2);
+            dialog.classList.add('visible');
+        }
+        
+        function hitlDecision(decision) {
+            const dialog = document.getElementById('hitlDialog');
+            dialog.classList.remove('visible');
+            
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                websocket.send(JSON.stringify({
+                    type: 'hitl_decision',
+                    payload: {
+                        decisions: [{ type: decision }]
+                    }
+                }));
+            }
+        }
+    </script>
+</body>
+</html>
