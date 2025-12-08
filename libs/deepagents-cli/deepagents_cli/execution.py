@@ -77,6 +77,7 @@ def prompt_for_tool_approval(
 
     options = ["approve", "reject", "auto-accept all going forward"]
     selected = 0  # Start with approve selected
+    num_options = len(options)
 
     try:
         fd = sys.stdin.fileno()
@@ -93,14 +94,15 @@ def prompt_for_tool_approval(
 
             while True:
                 if not first_render:
-                    # Move cursor back to start of menu (up 3 lines, then to start of line)
-                    sys.stdout.write("\033[3A\r")
+                    # Move cursor up by number of options and return to start of line
+                    sys.stdout.write(f"\033[{num_options}A\r")
 
                 first_render = False
 
                 # Display options vertically with ANSI color codes
                 for i, option in enumerate(options):
-                    sys.stdout.write("\r\033[K")  # Clear line from cursor to end
+                    # Clear entire line before writing
+                    sys.stdout.write("\033[2K\r")
 
                     if i == selected:
                         if option == "approve":

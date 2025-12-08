@@ -154,6 +154,7 @@ class TerminalHITLHandler(HITLHandler):
         """Prompt user to select an option."""
         options = ["approve", "reject", "auto-accept all going forward"]
         selected = 0
+        num_options = len(options)
 
         try:
             fd = sys.stdin.fileno()
@@ -168,12 +169,14 @@ class TerminalHITLHandler(HITLHandler):
 
                 while True:
                     if not first_render:
-                        sys.stdout.write("\033[3A\r")
+                        # Move cursor up by number of options and return to start of line
+                        sys.stdout.write(f"\033[{num_options}A\r")
 
                     first_render = False
 
                     for i, option in enumerate(options):
-                        sys.stdout.write("\r\033[K")
+                        # Clear entire line before writing
+                        sys.stdout.write("\033[2K\r")
 
                         if i == selected:
                             if option == "approve":
