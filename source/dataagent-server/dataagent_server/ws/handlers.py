@@ -53,6 +53,7 @@ class WebSocketChatHandler:
         self._executors: dict[str, Any] = {}  # session_id -> AgentExecutor
         self._session_users: dict[str, str] = {}  # session_id -> user_id
         self._session_user_contexts: dict[str, dict] = {}  # session_id -> user_context
+        self._session_workspaces: dict[str, str] = {}  # session_id -> workspace_path
     
     async def handle_connection(
         self,
@@ -166,20 +167,33 @@ class WebSocketChatHandler:
         
         is_new_session = session_id not in self._executors
         
-        # Check if user_id changed for existing session
+        # Check if user_id or workspace changed for existing session
         if not is_new_session:
             existing_user_id = self._session_users.get(session_id)
+            
+            # Check user_id change
             if existing_user_id != user_id:
                 logger.warning(
                     f"User ID changed for session {session_id[:8]}: {existing_user_id} -> {user_id}. "
                     f"Recreating executor with new user context."
                 )
-                # Remove old executor to force recreation
                 del self._executors[session_id]
                 is_new_session = True
             else:
-                logger.debug(f"Reusing existing executor for session {session_id[:8]}, user {user_id}")
-                return self._executors[session_id]
+                # Check workspace change (user may have changed default workspace)
+                current_workspace = await self._get_user_workspace_path(user_id)
+                stored_workspace = self._session_workspaces.get(session_id)
+                
+                if current_workspace and stored_workspace and current_workspace != stored_workspace:
+                    logger.info(
+                        f"Workspace changed for session {session_id[:8]}: {stored_workspace} -> {current_workspace}. "
+                        f"Recreating executor with new workspace."
+                    )
+                    del self._executors[session_id]
+                    is_new_session = True
+                else:
+                    logger.debug(f"Reusing existing executor for session {session_id[:8]}, user {user_id}")
+                    return self._executors[session_id]
         
         if self.agent_factory is None:
             return None
@@ -244,6 +258,8 @@ class WebSocketChatHandler:
         
         self._executors[session_id] = executor
         self._session_users[session_id] = user_id
+        if config.workspace_path:
+            self._session_workspaces[session_id] = config.workspace_path
         return executor
 
     async def _handle_chat(

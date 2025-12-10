@@ -303,8 +303,15 @@ class AgentFactory:
             # Setup rule store with global, user, and project directories
             global_rules_dir = self.settings.user_deepagents_dir / "rules"
             user_rules_dir = self.settings.get_agent_dir(config.assistant_id) / "rules"
+            
+            # For multi-tenant mode, use workspace_path as project root for rules
+            # This allows each user to have their own project-specific rules
             project_rules_dir = None
-            if self.settings.project_root:
+            if config.workspace_path:
+                # Multi-tenant mode: use user's workspace for project rules
+                project_rules_dir = Path(config.workspace_path) / ".dataagent" / "rules"
+            elif self.settings.project_root:
+                # CLI mode: use detected project root
                 project_rules_dir = self.settings.project_root / ".dataagent" / "rules"
             
             rule_store = FileRuleStore(
