@@ -105,7 +105,29 @@ async def stream_chat(
     config = AgentConfig(
         assistant_id=request.assistant_id or f"stream-{session_id[:8]}",
         auto_approve=True,  # Auto-approve for SSE (no HITL support in SSE)
+        user_id=user_id,  # Set user_id for multi-tenant isolation
     )
+    
+    # Get user's workspace path for multi-tenant isolation
+    try:
+        from dataagent_server.api.v1.workspaces import (
+            get_user_default_workspace_path,
+            ensure_user_default_workspace,
+        )
+        
+        workspace_path = await get_user_default_workspace_path(user_id)
+        if not workspace_path:
+            from dataagent_server.config import get_settings
+            settings = get_settings()
+            workspace_path = await ensure_user_default_workspace(
+                user_id, settings.workspace_base_path
+            )
+        
+        if workspace_path:
+            config.workspace_path = workspace_path
+            logger.info(f"Using workspace path for user {user_id}: {workspace_path}")
+    except Exception as e:
+        logger.warning(f"Failed to get workspace path for user {user_id}: {e}")
     
     # Load MCP tools for the user
     extra_tools = []

@@ -11,6 +11,7 @@ from dataagent_server.api.v1 import (
     user_profiles,
     rules,
     assistants,
+    workspaces,
 )
 
 __all__ = [
@@ -24,4 +25,5 @@ __all__ = [
     "user_profiles",
     "rules",
     "assistants",
+    "workspaces",
 ]

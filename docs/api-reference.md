@@ -461,6 +461,104 @@ POST /api/v1/users/{user_id}/mcp-servers/{server_name}/connect
 POST /api/v1/users/{user_id}/mcp-servers/{server_name}/disconnect
 ```
 
+### 工作目录管理
+
+工作目录用于多租户文件系统隔离，每个用户有独立的工作目录。
+
+#### 列出工作目录
+
+```
+GET /api/v1/workspaces
+```
+
+**响应:**
+```json
+{
+  "workspaces": [
+    {
+      "workspace_id": "uuid",
+      "name": "我的工作目录",
+      "path": "/var/dataagent/workspaces/user123",
+      "description": "默认工作目录",
+      "max_size_bytes": 1073741824,
+      "max_files": 10000,
+      "current_size_bytes": 1024000,
+      "current_file_count": 50,
+      "is_default": true,
+      "is_active": true,
+      "permission": "admin",
+      "created_at": "2024-01-01T00:00:00",
+      "updated_at": "2024-01-01T00:00:00",
+      "last_accessed_at": "2024-01-01T00:00:00"
+    }
+  ],
+  "total": 1
+}
+```
+
+#### 获取默认工作目录
+
+```
+GET /api/v1/workspaces/default
+```
+
+#### 创建工作目录
+
+```
+POST /api/v1/workspaces
+```
+
+**请求:**
+```json
+{
+  "name": "项目工作目录",
+  "path": "/var/dataagent/workspaces/user123/project1",
+  "description": "项目专用工作目录",
+  "max_size_bytes": 2147483648,
+  "max_files": 20000,
+  "is_default": false
+}
+```
+
+#### 获取工作目录详情
+
+```
+GET /api/v1/workspaces/{workspace_id}
+```
+
+#### 更新工作目录
+
+```
+PATCH /api/v1/workspaces/{workspace_id}
+```
+
+**请求:**
+```json
+{
+  "name": "更新后的名称",
+  "description": "更新后的描述",
+  "max_size_bytes": 3221225472,
+  "is_default": true
+}
+```
+
+#### 删除工作目录
+
+```
+DELETE /api/v1/workspaces/{workspace_id}
+```
+
+#### 设置默认工作目录
+
+```
+POST /api/v1/workspaces/{workspace_id}/set-default
+```
+
+**说明:**
+- 每个用户登录时会自动创建默认工作目录
+- Agent 执行文件操作时会使用用户的默认工作目录
+- 工作目录路径可通过环境变量 `DATAAGENT_WORKSPACE_BASE_PATH` 配置基础路径
+
 ### 规则管理
 
 规则用于定制 Agent 的行为和响应方式。
@@ -885,8 +983,11 @@ interface ServerMessage {
 | `DATAAGENT_SESSION_TIMEOUT` | 会话超时 (秒) | `3600` |
 | `DATAAGENT_MAX_CONNECTIONS` | 最大连接数 | `200` |
 | `DATAAGENT_SESSION_STORE` | 存储类型 | `memory` |
-| `DATAAGENT_MYSQL_HOST` | PostgreSQL 主机 | `localhost` |
-| `DATAAGENT_MYSQL_PORT` | PostgreSQL 端口 | `5432` |
-| `DATAAGENT_MYSQL_USER` | PostgreSQL 用户 | `root` |
-| `DATAAGENT_MYSQL_PASSWORD` | PostgreSQL 密码 | 空 |
-| `DATAAGENT_MYSQL_DATABASE` | PostgreSQL 数据库 | `dataagent` |
+| `DATAAGENT_POSTGRES_HOST` | PostgreSQL 主机 | `localhost` |
+| `DATAAGENT_POSTGRES_PORT` | PostgreSQL 端口 | `5432` |
+| `DATAAGENT_POSTGRES_USER` | PostgreSQL 用户 | `postgres` |
+| `DATAAGENT_POSTGRES_PASSWORD` | PostgreSQL 密码 | 空 |
+| `DATAAGENT_POSTGRES_DATABASE` | PostgreSQL 数据库 | `dataagent` |
+| `DATAAGENT_WORKSPACE_BASE_PATH` | 用户工作目录基础路径 | `/var/dataagent/workspaces` |
+| `DATAAGENT_WORKSPACE_DEFAULT_MAX_SIZE_BYTES` | 默认工作目录最大大小 | `1073741824` (1GB) |
+| `DATAAGENT_WORKSPACE_DEFAULT_MAX_FILES` | 默认工作目录最大文件数 | `10000` |

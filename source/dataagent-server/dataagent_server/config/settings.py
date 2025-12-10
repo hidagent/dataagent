@@ -58,6 +58,11 @@ class ServerSettings(BaseSettings):
     mcp_max_connections_per_user: int = 10
     mcp_max_total_connections: int = 100
     
+    # Workspace configuration (multi-tenant file isolation)
+    workspace_base_path: str = "/var/dataagent/workspaces"
+    workspace_default_max_size_bytes: int = 1073741824  # 1GB
+    workspace_default_max_files: int = 10000
+    
     model_config = SettingsConfigDict(
         env_prefix="DATAAGENT_",
         env_file=".env",

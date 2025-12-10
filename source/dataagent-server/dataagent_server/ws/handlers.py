@@ -162,10 +162,24 @@ class WebSocketChatHandler:
         Returns:
             AgentExecutor instance.
         """
+        logger.info(f"_get_or_create_executor called: session_id={session_id[:8]}..., user_id={user_id}")
+        
         is_new_session = session_id not in self._executors
         
+        # Check if user_id changed for existing session
         if not is_new_session:
-            return self._executors[session_id]
+            existing_user_id = self._session_users.get(session_id)
+            if existing_user_id != user_id:
+                logger.warning(
+                    f"User ID changed for session {session_id[:8]}: {existing_user_id} -> {user_id}. "
+                    f"Recreating executor with new user context."
+                )
+                # Remove old executor to force recreation
+                del self._executors[session_id]
+                is_new_session = True
+            else:
+                logger.debug(f"Reusing existing executor for session {session_id[:8]}, user {user_id}")
+                return self._executors[session_id]
         
         if self.agent_factory is None:
             return None
@@ -184,7 +198,14 @@ class WebSocketChatHandler:
         config = AgentConfig(
             assistant_id=assistant_id,
             auto_approve=False,  # Enable HITL
+            user_id=user_id,  # Set user_id for multi-tenant isolation
         )
+        
+        # Get user's workspace path for multi-tenant isolation
+        workspace_path = await self._get_user_workspace_path(user_id)
+        if workspace_path:
+            config.workspace_path = workspace_path
+            logger.info(f"Using workspace path for user {user_id}: {workspace_path}")
         
         # Persist new session to s_session table
         await self._persist_session(session_id, user_id, assistant_id)
@@ -503,6 +524,47 @@ class WebSocketChatHandler:
             },
             "timestamp": time.time(),
         })
+    
+    async def _get_user_workspace_path(self, user_id: str) -> str | None:
+        """Get the workspace path for a user.
+        
+        Retrieves the user's default workspace path from the database.
+        If no workspace exists, creates a default one.
+        
+        Args:
+            user_id: The user ID.
+            
+        Returns:
+            The workspace path or None if unable to determine.
+        """
+        try:
+            from dataagent_server.api.v1.workspaces import (
+                get_user_default_workspace_path,
+                ensure_user_default_workspace,
+            )
+            
+            # Try to get existing default workspace
+            workspace_path = await get_user_default_workspace_path(user_id)
+            
+            if workspace_path:
+                logger.info(f"Found existing workspace for user {user_id}: {workspace_path}")
+                return workspace_path
+            
+            # Create default workspace if none exists
+            # Use configurable base path from settings
+            from dataagent_server.config import get_settings
+            settings = get_settings()
+            
+            logger.info(f"Creating default workspace for user {user_id} at base path: {settings.workspace_base_path}")
+            workspace_path = await ensure_user_default_workspace(
+                user_id, settings.workspace_base_path
+            )
+            logger.info(f"Created workspace for user {user_id}: {workspace_path}")
+            return workspace_path
+            
+        except Exception as e:
+            logger.exception(f"Failed to get workspace path for user {user_id}: {e}")
+            return None
 
 
 class WebSocketHITLHandler:

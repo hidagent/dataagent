@@ -41,6 +41,9 @@ class AgentConfig:
     extra_tools: list[BaseTool] = field(default_factory=list)
     extra_middleware: list[AgentMiddleware] = field(default_factory=list)
     recursion_limit: int = 1000
+    # Multi-tenant workspace support
+    user_id: str | None = None  # User ID for workspace isolation
+    workspace_path: str | None = None  # User's workspace path (overrides cwd)
 
 
 def _format_shell_description(tool_call: ToolCall, _state: AgentState, _runtime: Runtime) -> str:
@@ -110,8 +113,19 @@ def _build_interrupt_config() -> dict[str, InterruptOnConfig]:
     }
 
 
-def get_system_prompt(assistant_id: str, sandbox_type: str | None = None) -> str:
-    """Get the base system prompt for the agent."""
+def get_system_prompt(
+    assistant_id: str,
+    sandbox_type: str | None = None,
+    workspace_path: str | None = None,
+) -> str:
+    """Get the base system prompt for the agent.
+    
+    Args:
+        assistant_id: The assistant ID.
+        sandbox_type: Optional sandbox type (e.g., "docker").
+        workspace_path: Optional user workspace path for multi-tenant isolation.
+                       If provided, this overrides the default cwd.
+    """
     agent_dir_path = f"~/.deepagents/{assistant_id}"
 
     if sandbox_type:
@@ -128,7 +142,8 @@ All code execution and file operations happen in this sandbox environment.
 
 """
     else:
-        cwd = Path.cwd()
+        # Use workspace_path if provided (multi-tenant mode), otherwise use cwd
+        cwd = Path(workspace_path) if workspace_path else Path.cwd()
         working_dir_section = f"""<env>
 Working directory: {cwd}
 </env>
@@ -258,8 +273,10 @@ class AgentFactory:
                 )
 
             if config.enable_shell:
+                # Use workspace_path if provided (multi-tenant), otherwise use cwd
+                shell_workspace = config.workspace_path or str(Path.cwd())
                 middleware.append(
-                    ShellMiddleware(workspace_root=str(Path.cwd()), env=os.environ)
+                    ShellMiddleware(workspace_root=shell_workspace, env=os.environ)
                 )
         else:
             # Sandbox mode
@@ -310,9 +327,11 @@ class AgentFactory:
             tools.append(web_search)
         tools.extend(config.extra_tools)
 
-        # System prompt
+        # System prompt - pass workspace_path for multi-tenant isolation
         system_prompt = config.system_prompt or get_system_prompt(
-            config.assistant_id, config.sandbox_type
+            config.assistant_id,
+            config.sandbox_type,
+            workspace_path=config.workspace_path,
         )
         
         # Append user context to system prompt if provided
