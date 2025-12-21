@@ -8,6 +8,14 @@ from pydantic import BaseModel, Field
 from dataagent_server.models.user import UserContextRequest
 
 
+class HITLResponse(BaseModel):
+    """HITL response from user."""
+    
+    type: str = Field("human_response", description="Response type, always 'human_response'")
+    request_id: str = Field(..., description="The interrupt/request ID to respond to")
+    response: dict = Field(..., description="User's response data")
+
+
 class ChatRequest(BaseModel):
     """Request model for chat endpoint."""
     
@@ -15,6 +23,7 @@ class ChatRequest(BaseModel):
     session_id: str | None = Field(None, description="Optional session ID to continue conversation")
     assistant_id: str | None = Field(None, description="Optional assistant ID to use")
     user_context: UserContextRequest | None = Field(None, description="Optional user context for personalization")
+    hitl_response: HITLResponse | None = Field(None, description="Optional HITL response for continuing interrupted execution")
 
 
 class ChatResponse(BaseModel):

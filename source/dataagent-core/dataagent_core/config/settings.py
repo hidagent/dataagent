@@ -105,6 +105,45 @@ class Settings:
             return None
         return self.project_root / ".deepagents" / "skills"
 
+    def get_builtin_skills_dir(self) -> Path | None:
+        """Get the built-in skills directory.
+        
+        Built-in skills are shipped with the package and located in:
+        - Development: {project_root}/builtin-skills/
+        - Installed: {package_dir}/builtin-skills/
+        - User: ~/.deepagents/builtin-skills/
+        
+        Search order:
+        1. Project root (development mode)
+        2. Package directory (installed package)
+        3. User's .deepagents directory
+        """
+        # First, check if we're in development mode (project root has builtin-skills)
+        if self.project_root:
+            dev_builtin = self.project_root / "builtin-skills"
+            if dev_builtin.exists():
+                return dev_builtin
+        
+        # Check relative to this file's location (for installed package)
+        # This file is at: dataagent_core/config/settings.py
+        # Package structure: dataagent/source/dataagent-core/dataagent_core/config/settings.py
+        # builtin-skills is at: dataagent/builtin-skills/
+        package_dir = Path(__file__).parent.parent  # dataagent_core/
+        
+        # Try multiple levels up to find builtin-skills
+        for _ in range(5):
+            pkg_builtin = package_dir / "builtin-skills"
+            if pkg_builtin.exists():
+                return pkg_builtin
+            package_dir = package_dir.parent
+        
+        # Check in user's .deepagents directory
+        user_builtin = self.user_deepagents_dir / "builtin-skills"
+        if user_builtin.exists():
+            return user_builtin
+        
+        return None
+
     def create_model(self, model_name: str | None = None) -> BaseChatModel:
         """Create a chat model based on available API keys."""
         if self.has_openai:

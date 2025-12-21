@@ -20,7 +20,7 @@ from langgraph.runtime import Runtime
 
 from dataagent_core.config import Settings, get_default_coding_instructions
 from dataagent_core.middleware import AgentMemoryMiddleware, SkillsMiddleware, ShellMiddleware, RulesMiddleware
-from dataagent_core.tools import http_request, fetch_url, web_search
+from dataagent_core.tools import http_request, fetch_url, web_search, human
 
 
 @dataclass
@@ -100,6 +100,15 @@ def _format_task_description(tool_call: ToolCall, _state: AgentState, _runtime: 
     )
 
 
+def _format_human_description(tool_call: ToolCall, _state: AgentState, _runtime: Runtime) -> str:
+    """Format description for human interaction tool."""
+    args = tool_call["args"]
+    interaction_type = args.get("interaction_type", "unknown")
+    title = args.get("title", "")
+    message = args.get("message", "")
+    return f"Type: {interaction_type}\nTitle: {title}\nMessage: {message}"
+
+
 def _build_interrupt_config() -> dict[str, InterruptOnConfig]:
     """Build HITL interrupt configuration."""
     return {
@@ -110,6 +119,7 @@ def _build_interrupt_config() -> dict[str, InterruptOnConfig]:
         "web_search": {"allowed_decisions": ["approve", "reject"], "description": _format_web_search_description},
         "fetch_url": {"allowed_decisions": ["approve", "reject"], "description": _format_fetch_url_description},
         "task": {"allowed_decisions": ["approve", "reject"], "description": _format_task_description},
+        "human": {"allowed_decisions": ["approve", "reject"], "description": _format_human_description},
     }
 
 
@@ -247,9 +257,11 @@ class AgentFactory:
         # Skills directories
         skills_dir = None
         project_skills_dir = None
+        builtin_skills_dir = None
         if config.enable_skills:
             skills_dir = self.settings.ensure_user_skills_dir(config.assistant_id)
             project_skills_dir = self.settings.get_project_skills_dir()
+            builtin_skills_dir = self.settings.get_builtin_skills_dir()
 
         # Build middleware stack
         middleware = []
@@ -269,6 +281,7 @@ class AgentFactory:
                         skills_dir=skills_dir,
                         assistant_id=config.assistant_id,
                         project_skills_dir=project_skills_dir,
+                        builtin_skills_dir=builtin_skills_dir,
                     )
                 )
 
@@ -293,6 +306,7 @@ class AgentFactory:
                         skills_dir=skills_dir,
                         assistant_id=config.assistant_id,
                         project_skills_dir=project_skills_dir,
+                        builtin_skills_dir=builtin_skills_dir,
                     )
                 )
 
@@ -329,7 +343,7 @@ class AgentFactory:
         middleware.extend(config.extra_middleware)
 
         # Build tools
-        tools = [http_request, fetch_url]
+        tools = [http_request, fetch_url, human]
         if self.settings.has_tavily:
             tools.append(web_search)
         tools.extend(config.extra_tools)

@@ -146,16 +146,33 @@ def _list_skills_from_dir(skills_dir: Path, source: str) -> list[SkillMetadata]:
 
 
 def list_skills(
-    *, user_skills_dir: Path | None = None, project_skills_dir: Path | None = None
+    *,
+    user_skills_dir: Path | None = None,
+    project_skills_dir: Path | None = None,
+    builtin_skills_dir: Path | None = None,
 ) -> list[SkillMetadata]:
-    """List skills from user and/or project directories."""
+    """List skills from user, project, and/or builtin directories.
+    
+    Priority (higher overrides lower):
+    1. Project skills (highest)
+    2. User skills
+    3. Builtin skills (lowest)
+    """
     all_skills: dict[str, SkillMetadata] = {}
 
+    # Load builtin skills first (lowest priority)
+    if builtin_skills_dir:
+        builtin_skills = _list_skills_from_dir(builtin_skills_dir, source="builtin")
+        for skill in builtin_skills:
+            all_skills[skill["name"]] = skill
+
+    # Load user skills (overrides builtin)
     if user_skills_dir:
         user_skills = _list_skills_from_dir(user_skills_dir, source="user")
         for skill in user_skills:
             all_skills[skill["name"]] = skill
 
+    # Load project skills (highest priority, overrides user and builtin)
     if project_skills_dir:
         project_skills = _list_skills_from_dir(project_skills_dir, source="project")
         for skill in project_skills:
@@ -175,11 +192,15 @@ class SkillsMiddleware(AgentMiddleware):
         skills_dir: str | Path,
         assistant_id: str,
         project_skills_dir: str | Path | None = None,
+        builtin_skills_dir: str | Path | None = None,
     ) -> None:
         self.skills_dir = Path(skills_dir).expanduser()
         self.assistant_id = assistant_id
         self.project_skills_dir = (
             Path(project_skills_dir).expanduser() if project_skills_dir else None
+        )
+        self.builtin_skills_dir = (
+            Path(builtin_skills_dir).expanduser() if builtin_skills_dir else None
         )
         self.user_skills_display = f"~/.deepagents/{assistant_id}/skills"
         self.system_prompt_template = SKILLS_SYSTEM_PROMPT
@@ -190,16 +211,28 @@ class SkillsMiddleware(AgentMiddleware):
             locations.append(
                 f"**Project Skills**: `{self.project_skills_dir}` (overrides user skills)"
             )
+        if self.builtin_skills_dir:
+            locations.append(
+                f"**Built-in Skills**: System-provided skills"
+            )
         return "\n".join(locations)
 
     def _format_skills_list(self, skills: list[SkillMetadata]) -> str:
         if not skills:
             return "(No skills available yet)"
 
+        builtin_skills = [s for s in skills if s["source"] == "builtin"]
         user_skills = [s for s in skills if s["source"] == "user"]
         project_skills = [s for s in skills if s["source"] == "project"]
 
         lines = []
+
+        if builtin_skills:
+            lines.append("**Built-in Skills:**")
+            for skill in builtin_skills:
+                lines.append(f"- **{skill['name']}**: {skill['description']}")
+                lines.append(f"  → Read `{skill['path']}` for full instructions")
+            lines.append("")
 
         if user_skills:
             lines.append("**User Skills:**")
@@ -220,6 +253,7 @@ class SkillsMiddleware(AgentMiddleware):
         skills = list_skills(
             user_skills_dir=self.skills_dir,
             project_skills_dir=self.project_skills_dir,
+            builtin_skills_dir=self.builtin_skills_dir,
         )
         return SkillsStateUpdate(skills_metadata=skills)
 
