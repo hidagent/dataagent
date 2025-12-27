@@ -1,0 +1,4 @@
+# file: /Users/dszhao/source/data_agent_all/dataagent/source/dataagent-core/dataagent_core/events/rules.py
+# hypothesis_version: 6.148.7
+
+['conflicts', 'evaluated_rules', 'final_rules', 'matched_rules', 'request_id', 'rule_debug', 'rules_applied', 'skipped_count', 'skipped_rules', 'total_content_size', 'total_size', 'triggered_rules']

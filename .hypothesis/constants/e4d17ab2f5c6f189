@@ -1,0 +1,4 @@
+# file: /Users/dszhao/source/data_agent_all/dataagent/source/dataagent-core/dataagent_core/rules/conflict.py
+# hypothesis_version: 6.148.7
+
+['add', 'allow', 'always', 'block', 'conflict_type', 'conflicts', 'deny', 'details', 'disable', 'enable', 'exclude', 'forbidden', 'include', 'must', 'never', 'permit', 'prohibited', 'remove', 'required', 'resolution', 'rule1_name', 'rule1_scope', 'rule2_name', 'rule2_scope', 'same_name', 'total_conflicts', 'warnings']

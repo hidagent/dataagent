@@ -1,0 +1,4 @@
+# file: /Users/dszhao/source/data_agent_all/dataagent/source/dataagent-core/dataagent_core/tools/human.py
+# hypothesis_version: 6.148.7
+
+['__hitl_request__', 'cancelText', 'choice', 'confirm', 'confirmText', 'defaultValue', 'error', 'fields', 'form', 'input', 'message', 'options', 'placeholder', 'request', 'timeout', 'title', 'type', '取消', '确认']

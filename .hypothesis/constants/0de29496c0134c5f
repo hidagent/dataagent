@@ -1,0 +1,4 @@
+# file: /Users/dszhao/source/data_agent_all/dataagent/source/dataagent-core/dataagent_core/rules/merger.py
+# hypothesis_version: 6.148.7
+
+[100000, '## Agent Rules\n', 'name', 'resolution', 'scopes', 'winner_scope']

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "test": {
+      "command": "uvx",
+      "args": [],
+      "disabled": false
+    }
+  }
+}

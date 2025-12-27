@@ -19,12 +19,13 @@ def handle_slash_command(
     mcp_loader=None,
 ) -> str | None:
     """Handle slash commands. Returns 'exit' to exit, None otherwise."""
-    command = user_input.lower().strip()
+    command = user_input.strip()
+    command_lower = command.lower()
 
-    if command in ("/quit", "/exit"):
+    if command_lower in ("/quit", "/exit"):
         return "exit"
 
-    if command == "/clear":
+    if command_lower == "/clear":
         console.clear()
         if token_tracker:
             token_tracker.reset()
@@ -35,47 +36,23 @@ def handle_slash_command(
         console.print()
         return None
 
-    if command == "/help":
+    if command_lower == "/help":
         show_interactive_help(console)
         return None
 
-    if command == "/tokens":
+    if command_lower == "/tokens":
         if token_tracker:
             token_tracker.display_session()
         else:
             console.print("Token tracking not available.", style=COLORS["dim"])
         return None
 
-    if command == "/mcp reload":
-        if mcp_loader:
-            import asyncio
-            try:
-                mcp_loader.reload_config()
-                tools = asyncio.get_event_loop().run_until_complete(mcp_loader.get_tools())
-                console.print(f"MCP config reloaded. {len(tools)} tools available.", style=COLORS["primary"])
-            except Exception as e:
-                console.print(f"[red]Failed to reload MCP config: {e}[/red]")
-        else:
-            console.print("MCP not configured.", style=COLORS["dim"])
-        return None
-
-    if command == "/mcp":
-        if mcp_loader:
-            config = mcp_loader.load_config()
-            servers = config.get_enabled_servers()
-            if servers:
-                console.print("\n[bold]MCP Servers:[/bold]", style=COLORS["primary"])
-                for name, server in servers.items():
-                    console.print(f"  • {name}: {server.command} {' '.join(server.args)}", style=COLORS["dim"])
-                console.print()
-            else:
-                console.print("No MCP servers configured.", style=COLORS["dim"])
-        else:
-            console.print("MCP not configured.", style=COLORS["dim"])
-        return None
+    # MCP commands - route to handler
+    if command_lower.startswith("/mcp"):
+        return handle_mcp_command(command, console, mcp_loader)
 
     # Rules commands
-    if command.startswith("/rules"):
+    if command_lower.startswith("/rules"):
         return handle_rules_command(command, console, session_state)
 
     console.print(f"Unknown command: {command}", style="yellow")
@@ -94,8 +71,16 @@ def show_interactive_help(console: Console) -> None:
 
     console.print()
     console.print("[bold]MCP Commands:[/bold]", style=COLORS["primary"])
-    console.print("  /mcp            Show configured MCP servers", style=COLORS["dim"])
-    console.print("  /mcp reload     Reload MCP configuration", style=COLORS["dim"])
+    console.print("  /mcp                Show configured MCP servers", style=COLORS["dim"])
+    console.print("  /mcp list           List all MCP servers with status", style=COLORS["dim"])
+    console.print("  /mcp add <name>     Add a new MCP server", style=COLORS["dim"])
+    console.print("  /mcp remove <name>  Remove an MCP server", style=COLORS["dim"])
+    console.print("  /mcp show <name>    Show server details", style=COLORS["dim"])
+    console.print("  /mcp enable <name>  Enable an MCP server", style=COLORS["dim"])
+    console.print("  /mcp disable <name> Disable an MCP server", style=COLORS["dim"])
+    console.print("  /mcp test <name>    Test server connection", style=COLORS["dim"])
+    console.print("  /mcp reload         Reload MCP configuration", style=COLORS["dim"])
+    console.print("  /mcp help           Show MCP command help", style=COLORS["dim"])
     console.print()
     console.print("[bold]Rules Commands:[/bold]", style=COLORS["primary"])
     console.print("  /rules          List all rules", style=COLORS["dim"])
@@ -285,6 +270,414 @@ def execute_bash_command(user_input: str, console: Console) -> None:
         console.print("[red]Command timed out after 60 seconds[/red]")
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
+
+
+# ============================================================================
+# MCP Commands
+# ============================================================================
+
+
+def handle_mcp_command(
+    command: str,
+    console: Console,
+    mcp_loader=None,
+) -> str | None:
+    """Handle /mcp commands."""
+    if not mcp_loader:
+        console.print("MCP not configured.", style=COLORS["dim"])
+        return None
+
+    try:
+        parts = command.split()
+        
+        # /mcp or /mcp list
+        if len(parts) == 1 or parts[1].lower() == "list":
+            return mcp_list(console, mcp_loader)
+        
+        subcommand = parts[1].lower()
+        args = parts[2:] if len(parts) > 2 else []
+        
+        if subcommand == "add":
+            return mcp_add(console, mcp_loader, args)
+        
+        if subcommand == "remove":
+            if not args:
+                console.print("Usage: /mcp remove <name>", style=COLORS["dim"])
+                return None
+            return mcp_remove(console, mcp_loader, args[0])
+        
+        if subcommand == "show":
+            if not args:
+                console.print("Usage: /mcp show <name>", style=COLORS["dim"])
+                return None
+            return mcp_show(console, mcp_loader, args[0])
+        
+        if subcommand == "enable":
+            if not args:
+                console.print("Usage: /mcp enable <name>", style=COLORS["dim"])
+                return None
+            return mcp_enable(console, mcp_loader, args[0])
+        
+        if subcommand == "disable":
+            if not args:
+                console.print("Usage: /mcp disable <name>", style=COLORS["dim"])
+                return None
+            return mcp_disable(console, mcp_loader, args[0])
+        
+        if subcommand == "test":
+            if not args:
+                console.print("Usage: /mcp test <name>", style=COLORS["dim"])
+                return None
+            return mcp_test(console, mcp_loader, args[0])
+        
+        if subcommand == "update":
+            return mcp_update(console, mcp_loader, args)
+        
+        if subcommand == "reload":
+            return mcp_reload(console, mcp_loader)
+        
+        if subcommand == "help":
+            return mcp_help(console)
+        
+        console.print(f"Unknown MCP command: {subcommand}", style="yellow")
+        console.print("Type /mcp help for available commands.", style=COLORS["dim"])
+        return None
+        
+    except Exception as e:
+        console.print(f"[red]Error executing MCP command: {e}[/red]")
+        return None
+
+
+def mcp_list(console: Console, mcp_loader) -> None:
+    """List all MCP servers."""
+    config = mcp_loader.load_config()
+    servers = config.servers
+    
+    if not servers:
+        console.print("No MCP servers configured.", style=COLORS["dim"])
+        console.print("Use /mcp add <name> --command <cmd> to add a server.", style=COLORS["dim"])
+        return None
+    
+    console.print("\n[bold]MCP Servers:[/bold]\n", style=COLORS["primary"])
+    
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Name", style="cyan")
+    table.add_column("Type")
+    table.add_column("Command/URL")
+    table.add_column("Status")
+    
+    for name, server in servers.items():
+        if server.url:
+            server_type = "HTTP"
+            endpoint = server.url
+        else:
+            server_type = "Stdio"
+            endpoint = f"{server.command} {' '.join(server.args)}"
+        
+        status = "[red]Disabled[/red]" if server.disabled else "[green]Enabled[/green]"
+        
+        table.add_row(name, server_type, endpoint[:50], status)
+    
+    console.print(table)
+    console.print()
+    return None
+
+
+def mcp_add(console: Console, mcp_loader, args: list[str]) -> None:
+    """Add a new MCP server."""
+    from dataagent_core.mcp.config import MCPServerConfig
+    
+    if not args:
+        console.print("Usage: /mcp add <name> --command <cmd> [--args <arg1> <arg2>...]", style=COLORS["dim"])
+        console.print("       /mcp add <name> --url <url> [--transport sse|streamable_http]", style=COLORS["dim"])
+        console.print()
+        console.print("Examples:", style=COLORS["dim"])
+        console.print("  /mcp add weather --command uvx --args mcp-weather", style=COLORS["dim"])
+        console.print("  /mcp add api --url https://api.example.com/mcp", style=COLORS["dim"])
+        return None
+    
+    name = args[0]
+    
+    # Check if server already exists
+    if mcp_loader.get_server(name):
+        console.print(f"[red]Error:[/red] Server '{name}' already exists.", style="red")
+        console.print(f"Use /mcp show {name} to view it, or /mcp remove {name} to delete it.", style=COLORS["dim"])
+        return None
+    
+    # Parse arguments
+    command = None
+    url = None
+    server_args = []
+    env = {}
+    transport = "sse"
+    
+    i = 1
+    while i < len(args):
+        if args[i] == "--command" and i + 1 < len(args):
+            command = args[i + 1]
+            i += 2
+        elif args[i] == "--url" and i + 1 < len(args):
+            url = args[i + 1]
+            i += 2
+        elif args[i] == "--args" and i + 1 < len(args):
+            # Collect all remaining args until next flag
+            i += 1
+            while i < len(args) and not args[i].startswith("--"):
+                server_args.append(args[i])
+                i += 1
+        elif args[i] == "--transport" and i + 1 < len(args):
+            transport = args[i + 1]
+            i += 2
+        elif args[i] == "--env" and i + 1 < len(args):
+            # Parse KEY=VALUE
+            env_str = args[i + 1]
+            if "=" in env_str:
+                key, value = env_str.split("=", 1)
+                env[key] = value
+            i += 2
+        else:
+            i += 1
+    
+    if not command and not url:
+        console.print("[red]Error:[/red] Must specify --command or --url", style="red")
+        return None
+    
+    # Create server config
+    server = MCPServerConfig(
+        name=name,
+        command=command or "",
+        args=server_args,
+        env=env,
+        url=url,
+        transport=transport,
+        disabled=False,
+    )
+    
+    # Add server
+    if mcp_loader.add_server(server):
+        console.print(f"[green]✓[/green] Added MCP server: {name}", style=COLORS["primary"])
+        config_path = mcp_loader.get_or_create_config_path()
+        console.print(f"Config saved to: {config_path}", style=COLORS["dim"])
+    else:
+        console.print(f"[red]Error:[/red] Failed to add server '{name}'", style="red")
+    
+    return None
+
+
+def mcp_remove(console: Console, mcp_loader, name: str) -> None:
+    """Remove an MCP server."""
+    if not mcp_loader.get_server(name):
+        console.print(f"[red]Error:[/red] Server '{name}' not found.", style="red")
+        return None
+    
+    if mcp_loader.remove_server(name):
+        console.print(f"[green]✓[/green] Removed MCP server: {name}", style=COLORS["primary"])
+    else:
+        console.print(f"[red]Error:[/red] Failed to remove server '{name}'", style="red")
+    
+    return None
+
+
+def mcp_show(console: Console, mcp_loader, name: str) -> None:
+    """Show details of an MCP server."""
+    server = mcp_loader.get_server(name)
+    
+    if not server:
+        console.print(f"[red]Error:[/red] Server '{name}' not found.", style="red")
+        return None
+    
+    console.print(f"\n[bold]MCP Server: {name}[/bold]", style=COLORS["primary"])
+    console.print()
+    
+    if server.url:
+        console.print(f"  Type:      HTTP", style=COLORS["dim"])
+        console.print(f"  URL:       {server.url}", style=COLORS["dim"])
+        console.print(f"  Transport: {server.transport}", style=COLORS["dim"])
+        if server.headers:
+            console.print(f"  Headers:   {server.headers}", style=COLORS["dim"])
+    else:
+        console.print(f"  Type:      Stdio", style=COLORS["dim"])
+        console.print(f"  Command:   {server.command}", style=COLORS["dim"])
+        if server.args:
+            console.print(f"  Args:      {' '.join(server.args)}", style=COLORS["dim"])
+    
+    if server.env:
+        console.print(f"  Env:       {server.env}", style=COLORS["dim"])
+    
+    status = "[red]Disabled[/red]" if server.disabled else "[green]Enabled[/green]"
+    console.print(f"  Status:    {status}")
+    
+    if server.auto_approve:
+        console.print(f"  Auto-approve: {', '.join(server.auto_approve)}", style=COLORS["dim"])
+    
+    console.print()
+    return None
+
+
+def mcp_enable(console: Console, mcp_loader, name: str) -> None:
+    """Enable an MCP server."""
+    if not mcp_loader.get_server(name):
+        console.print(f"[red]Error:[/red] Server '{name}' not found.", style="red")
+        return None
+    
+    if mcp_loader.set_server_disabled(name, False):
+        console.print(f"[green]✓[/green] Enabled MCP server: {name}", style=COLORS["primary"])
+    else:
+        console.print(f"[red]Error:[/red] Failed to enable server '{name}'", style="red")
+    
+    return None
+
+
+def mcp_disable(console: Console, mcp_loader, name: str) -> None:
+    """Disable an MCP server."""
+    if not mcp_loader.get_server(name):
+        console.print(f"[red]Error:[/red] Server '{name}' not found.", style="red")
+        return None
+    
+    if mcp_loader.set_server_disabled(name, True):
+        console.print(f"[green]✓[/green] Disabled MCP server: {name}", style=COLORS["primary"])
+    else:
+        console.print(f"[red]Error:[/red] Failed to disable server '{name}'", style="red")
+    
+    return None
+
+
+def mcp_test(console: Console, mcp_loader, name: str) -> None:
+    """Test connection to an MCP server."""
+    import asyncio
+    
+    server = mcp_loader.get_server(name)
+    
+    if not server:
+        console.print(f"[red]Error:[/red] Server '{name}' not found.", style="red")
+        return None
+    
+    if server.disabled:
+        console.print(f"[yellow]Warning:[/yellow] Server '{name}' is disabled.", style="yellow")
+        console.print("Enable it first with: /mcp enable " + name, style=COLORS["dim"])
+        return None
+    
+    console.print(f"Testing connection to '{name}'...", style=COLORS["dim"])
+    
+    try:
+        from langchain_mcp_adapters.client import MultiServerMCPClient
+    except ImportError:
+        console.print("[red]Error:[/red] langchain-mcp-adapters not installed.", style="red")
+        console.print("Install with: pip install langchain-mcp-adapters", style=COLORS["dim"])
+        return None
+    
+    async def test_connection():
+        mcp_config = {name: server.to_mcp_client_config()}
+        try:
+            async with MultiServerMCPClient(mcp_config) as client:
+                tools = client.get_tools()
+                return tools
+        except Exception as e:
+            raise e
+    
+    try:
+        tools = asyncio.get_event_loop().run_until_complete(test_connection())
+        console.print(f"[green]✓[/green] Connected to '{name}'", style=COLORS["primary"])
+        console.print(f"  Available tools ({len(tools)}):", style=COLORS["dim"])
+        for tool in tools:
+            console.print(f"    • {tool.name}", style=COLORS["dim"])
+    except Exception as e:
+        console.print(f"[red]✗[/red] Connection failed: {e}", style="red")
+    
+    return None
+
+
+def mcp_update(console: Console, mcp_loader, args: list[str]) -> None:
+    """Update an MCP server configuration."""
+    if not args:
+        console.print("Usage: /mcp update <name> [--command <cmd>] [--url <url>] [--args <args>]", style=COLORS["dim"])
+        return None
+    
+    name = args[0]
+    
+    if not mcp_loader.get_server(name):
+        console.print(f"[red]Error:[/red] Server '{name}' not found.", style="red")
+        return None
+    
+    # Parse update arguments
+    updates = {}
+    i = 1
+    while i < len(args):
+        if args[i] == "--command" and i + 1 < len(args):
+            updates["command"] = args[i + 1]
+            i += 2
+        elif args[i] == "--url" and i + 1 < len(args):
+            updates["url"] = args[i + 1]
+            i += 2
+        elif args[i] == "--args" and i + 1 < len(args):
+            # Collect all remaining args until next flag
+            new_args = []
+            i += 1
+            while i < len(args) and not args[i].startswith("--"):
+                new_args.append(args[i])
+                i += 1
+            updates["args"] = new_args
+        elif args[i] == "--transport" and i + 1 < len(args):
+            updates["transport"] = args[i + 1]
+            i += 2
+        else:
+            i += 1
+    
+    if not updates:
+        console.print("No updates specified.", style=COLORS["dim"])
+        return None
+    
+    if mcp_loader.update_server(name, **updates):
+        console.print(f"[green]✓[/green] Updated MCP server: {name}", style=COLORS["primary"])
+    else:
+        console.print(f"[red]Error:[/red] Failed to update server '{name}'", style="red")
+    
+    return None
+
+
+def mcp_reload(console: Console, mcp_loader) -> None:
+    """Reload MCP configuration."""
+    import asyncio
+    
+    try:
+        mcp_loader.reload_config()
+        tools = asyncio.get_event_loop().run_until_complete(mcp_loader.get_tools())
+        console.print(f"[green]✓[/green] MCP config reloaded. {len(tools)} tools available.", style=COLORS["primary"])
+    except Exception as e:
+        console.print(f"[red]Error:[/red] Failed to reload MCP config: {e}", style="red")
+    
+    return None
+
+
+def mcp_help(console: Console) -> None:
+    """Show MCP command help."""
+    console.print("\n[bold]MCP Commands:[/bold]", style=COLORS["primary"])
+    console.print()
+    console.print("  /mcp                    List all MCP servers", style=COLORS["dim"])
+    console.print("  /mcp list               List all MCP servers with status", style=COLORS["dim"])
+    console.print("  /mcp show <name>        Show server configuration details", style=COLORS["dim"])
+    console.print("  /mcp add <name> ...     Add a new MCP server", style=COLORS["dim"])
+    console.print("  /mcp remove <name>      Remove an MCP server", style=COLORS["dim"])
+    console.print("  /mcp enable <name>      Enable an MCP server", style=COLORS["dim"])
+    console.print("  /mcp disable <name>     Disable an MCP server", style=COLORS["dim"])
+    console.print("  /mcp update <name> ...  Update server configuration", style=COLORS["dim"])
+    console.print("  /mcp test <name>        Test server connection", style=COLORS["dim"])
+    console.print("  /mcp reload             Reload configuration from file", style=COLORS["dim"])
+    console.print("  /mcp help               Show this help", style=COLORS["dim"])
+    console.print()
+    console.print("[bold]Adding Servers:[/bold]", style=COLORS["primary"])
+    console.print()
+    console.print("  Stdio server (command-based):", style=COLORS["dim"])
+    console.print("    /mcp add myserver --command uvx --args mcp-package arg1 arg2", style=COLORS["dim"])
+    console.print()
+    console.print("  HTTP server (URL-based):", style=COLORS["dim"])
+    console.print("    /mcp add myserver --url https://api.example.com/mcp", style=COLORS["dim"])
+    console.print("    /mcp add myserver --url https://api.example.com/mcp --transport streamable_http", style=COLORS["dim"])
+    console.print()
+    console.print("[bold]Configuration:[/bold]", style=COLORS["primary"])
+    console.print(f"  Config file: ~/.deepagents/{{agent}}/mcp.json", style=COLORS["dim"])
+    console.print()
+    return None
 
 
 # ============================================================================

@@ -1,0 +1,4 @@
+# file: /Users/dszhao/source/data_agent_all/dataagent/source/dataagent-core/dataagent_core/mcp/store.py
+# hypothesis_version: 6.148.7
+
+['args', 'auto_approve', 'command', 'disabled', 'env', 'server_name', 'user_id']

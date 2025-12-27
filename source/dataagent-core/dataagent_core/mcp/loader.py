@@ -151,3 +151,128 @@ class MCPConfigLoader:
         for server in config.get_enabled_servers().values():
             auto_approve.update(server.auto_approve)
         return auto_approve
+
+    def get_or_create_config_path(self) -> Path:
+        """Get config path, creating user config path if none exists.
+        
+        Priority:
+        1. Explicit config_path (even if file doesn't exist yet)
+        2. Existing config from find_config_path()
+        3. User config path
+        4. Current directory fallback
+        """
+        # If explicit config_path was provided, use it (for save operations)
+        if self.config_path:
+            return self.config_path
+        
+        # Check for existing config
+        config_path = self.find_config_path()
+        if config_path:
+            return config_path
+        
+        # Default to user config path
+        user_path = self.get_user_config_path()
+        if user_path:
+            return user_path
+        
+        # Fallback to current directory
+        return Path.cwd() / "mcp.json"
+
+    def save_config(self, config: MCPConfig | None = None) -> None:
+        """Save MCP configuration to file.
+        
+        Args:
+            config: Configuration to save. If None, saves current config.
+        """
+        if config is None:
+            config = self.load_config()
+        
+        config_path = self.get_or_create_config_path()
+        config.to_json_file(config_path)
+        logger.info(f"Saved MCP config to: {config_path}")
+        
+        # Update cached config
+        self._config = config
+
+    def add_server(self, server: "MCPServerConfig") -> bool:
+        """Add a server to configuration.
+        
+        Args:
+            server: Server configuration to add.
+            
+        Returns:
+            True if added, False if server with same name exists.
+        """
+        from dataagent_core.mcp.config import MCPServerConfig
+        
+        config = self.load_config()
+        if server.name in config.servers:
+            return False
+        
+        config.add_server(server)
+        self.save_config(config)
+        return True
+
+    def remove_server(self, name: str) -> bool:
+        """Remove a server from configuration.
+        
+        Args:
+            name: Server name to remove.
+            
+        Returns:
+            True if removed, False if not found.
+        """
+        config = self.load_config()
+        if name not in config.servers:
+            return False
+        
+        config.remove_server(name)
+        self.save_config(config)
+        return True
+
+    def update_server(self, name: str, **kwargs) -> bool:
+        """Update server configuration.
+        
+        Args:
+            name: Server name to update.
+            **kwargs: Fields to update (command, url, args, env, etc.)
+            
+        Returns:
+            True if updated, False if not found.
+        """
+        config = self.load_config()
+        server = config.get_server(name)
+        if not server:
+            return False
+        
+        # Update only provided fields
+        for key, value in kwargs.items():
+            if hasattr(server, key) and value is not None:
+                setattr(server, key, value)
+        
+        self.save_config(config)
+        return True
+
+    def get_server(self, name: str) -> "MCPServerConfig | None":
+        """Get a specific server configuration.
+        
+        Args:
+            name: Server name.
+            
+        Returns:
+            Server configuration or None if not found.
+        """
+        config = self.load_config()
+        return config.get_server(name)
+
+    def set_server_disabled(self, name: str, disabled: bool) -> bool:
+        """Enable or disable a server.
+        
+        Args:
+            name: Server name.
+            disabled: True to disable, False to enable.
+            
+        Returns:
+            True if updated, False if not found.
+        """
+        return self.update_server(name, disabled=disabled)

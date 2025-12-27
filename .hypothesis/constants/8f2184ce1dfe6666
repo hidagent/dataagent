@@ -1,0 +1,4 @@
+# file: /Users/dszhao/source/data_agent_all/dataagent/source/dataagent-core/dataagent_core/rules/parser.py
+# hypothesis_version: 6.148.7
+
+[100, 1024, 50000, '"', '#', "'", '1', '^(\\w+):\\s*(.*)$', 'always', 'description', 'enabled', 'false', 'fileMatch', 'fileMatchPattern', 'inclusion', 'manual', 'name', 'on', 'override', 'priority', 'true', 'utf-8', 'yes']

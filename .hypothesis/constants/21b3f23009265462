@@ -1,0 +1,4 @@
+# file: /Users/dszhao/source/data_agent_all/dataagent/source/dataagent-core/dataagent_core/rules/models.py
+# hypothesis_version: 6.148.7
+
+[100, 'Rule', 'always', 'conflicts', 'content', 'context_vars', 'created_at', 'description', 'enabled', 'evaluated_rules', 'fileMatch', 'file_match_pattern', 'final_rules', 'global', 'inclusion', 'manual', 'match_reason', 'matched_files', 'matched_rules', 'metadata', 'name', 'override', 'priority', 'project', 'reason', 'request_id', 'rule1', 'rule2', 'rule_name', 'rule_scope', 'scope', 'session', 'skipped_rules', 'source_path', 'timestamp', 'total_content_size', 'updated_at', 'user']

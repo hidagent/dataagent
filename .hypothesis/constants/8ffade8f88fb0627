@@ -1,0 +1,4 @@
+# file: /Users/dszhao/source/data_agent_all/dataagent/source/dataagent-core/dataagent_core/rules/matcher.py
+# hypothesis_version: 6.148.7
+
+['**', '/', '@(\\w[\\w\\-]*)', '`([^`]+\\.\\w+)`', 'always included', 'disabled', 'file:([^\\s]+)', 'manually referenced', 'path:([^\\s]+)', 'unknown reason']
